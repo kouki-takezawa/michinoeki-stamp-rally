@@ -11,17 +11,17 @@ npm run dev
 
 ## データ
 
-`src/data/michinoeki.json` は全国1,231件の道の駅データ（id・施設名・都道府県・緯度経度・座標出典）。
-`scripts/michinoeki_master.csv` を元に `scripts/convert-csv-to-json.mjs` で生成している。
+`src/data/michinoeki.json` は全国1,231件の道の駅データ（id・施設名・都道府県・緯度経度・座標出典・設備・公式ページURL）。
 
+- 座標・基本情報：`scripts/michinoeki_master.csv`（マッハーツールがCC BY 4.0で集約）から `scripts/convert-csv-to-json.mjs` で生成
+- 設備情報（レストラン・温泉・EV充電など18項目）・公式ページURL：`scripts/mlit_p35_raw.geojson`（国土交通省 国土数値情報「道の駅データ」P35、2018年度版）から `scripts/add-facilities.mjs` で最近傍点マッチング（150m以内）により付与。2018年度以降に開業した道の駅（約90件）は設備情報が付与されない
 - 座標データ出典：国土交通省 国土数値情報（道の駅データ、P35）を基本とし、OpenStreetMap等で補完
-- 座標データの集約：[マッハーツール](https://www.mach-tools.net/map/michinoeki/)（CC BY 4.0）
-- 施設情報（レストラン・温泉等）・営業時間は本データに含まれていないため未実装。将来的に公式データで拡充する。
 
-データを更新する場合は `scripts/michinoeki_master.csv` を差し替えて次を実行する。
+データを更新する場合は元データを差し替えて次を順番に実行する。
 
 ```bash
 node scripts/convert-csv-to-json.mjs
+node scripts/add-facilities.mjs
 ```
 
 ## 主な機能
@@ -33,7 +33,7 @@ node scripts/convert-csv-to-json.mjs
 - プルトゥリフレッシュで現在地を再取得
 
 **訪問・記録**
-- 道の駅詳細（Leafletミニマップ、Googleマップ経路リンク、徒歩／車の概算所要時間）
+- 道の駅詳細（Leafletミニマップ、Googleマップ経路リンク、徒歩／車の概算所要時間、設備バッジ、公式ページへの写真・詳細情報リンク）
 - チェックイン（距離300m以内 かつ 位置情報精度±100m以内で活性化。カジュアルな自己申告制で厳密な不正防止はしない）
 - 訪問メモ（休憩／食事／温泉／お土産のタグ、写真1枚。写真は端末のIndexedDBにのみ保存）
 - お気に入り登録（☆）
@@ -73,5 +73,6 @@ node scripts/convert-csv-to-json.mjs
 
 ## Phase2（未実装・将来拡張）
 
-- 施設情報・営業時間の表示（データソースの拡充が必要）
+- 営業時間の表示（現データソースに含まれないため未実装）
+- 2018年度以降に開業した道の駅（約90件）への設備情報の追加
 - チェックイン写真のエクスポート対象への追加（現状はJSONエクスポート対象外）

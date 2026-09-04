@@ -7,6 +7,8 @@ export interface Station {
   lat: number;
   lng: number;
   source: CoordinateSource;
+  facilities?: string[];
+  officialUrl?: string;
 }
 
 export interface StationWithDistance extends Station {

@@ -2,6 +2,7 @@ import { lazy, Suspense } from 'react';
 import { evaluateCheckin } from '../lib/checkin';
 import { formatDistance } from '../lib/distance';
 import { estimateEta } from '../lib/eta';
+import { FACILITY_ICON } from '../lib/facilityIcons';
 import { formatRelativeTime } from '../lib/relativeTime';
 import type { GeoPosition } from '../hooks/useGeolocation';
 import type { CheckinTag, Station } from '../lib/types';
@@ -91,14 +92,46 @@ export function StationDetail({
         />
       </Suspense>
 
-      <a
-        href={navUrl}
-        target="_blank"
-        rel="noreferrer"
-        className="mt-3 block w-full rounded-lg border border-border bg-surface py-2.5 text-center text-sm font-bold text-accent"
-      >
-        📍 Googleマップで経路を見る
-      </a>
+      <div className="mt-3 grid grid-cols-2 gap-2">
+        <a
+          href={navUrl}
+          target="_blank"
+          rel="noreferrer"
+          className="block rounded-lg border border-border bg-surface py-2.5 text-center text-sm font-bold text-accent"
+        >
+          📍 経路を見る
+        </a>
+        {station.officialUrl ? (
+          <a
+            href={station.officialUrl}
+            target="_blank"
+            rel="noreferrer"
+            className="block rounded-lg border border-border bg-surface py-2.5 text-center text-sm font-bold text-accent"
+          >
+            🖼️ 写真・詳細（公式）
+          </a>
+        ) : (
+          <span className="flex items-center justify-center rounded-lg border border-dashed border-border py-2.5 text-center text-xs text-ink-faint">
+            公式ページ情報なし
+          </span>
+        )}
+      </div>
+
+      {station.facilities && station.facilities.length > 0 && (
+        <div className="mt-4">
+          <div className="mb-1.5 text-xs font-bold text-ink-muted">設備</div>
+          <div className="flex flex-wrap gap-1.5">
+            {station.facilities.map((f) => (
+              <span
+                key={f}
+                className="rounded-full border border-border bg-surface px-2.5 py-1 text-xs font-bold text-ink-muted"
+              >
+                <span aria-hidden="true">{FACILITY_ICON[f] ?? '・'}</span> {f}
+              </span>
+            ))}
+          </div>
+        </div>
+      )}
 
       <div className="mt-4 grid grid-cols-2 gap-3 text-sm">
         <div className="rounded-lg border border-border bg-surface p-3">

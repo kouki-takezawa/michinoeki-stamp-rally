@@ -49,7 +49,7 @@ export function NearbyScreen({
   const [query, setQuery] = useState('');
   const [prefecture, setPrefecture] = useState('');
   const [unvisitedOnly, setUnvisitedOnly] = useState(false);
-  const [view, setView] = useState<'list' | 'map'>('list');
+  const [view, setView] = useState<'list' | 'map'>('map');
   const [showPrefecturePicker, setShowPrefecturePicker] = useState(false);
 
   const filtered = useMemo(() => {
