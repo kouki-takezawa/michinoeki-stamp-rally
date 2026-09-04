@@ -3,6 +3,7 @@ import { requestNotificationPermission } from '../lib/notifications';
 import { usePreferences, type Skin } from '../lib/PreferencesContext';
 import { addProfile, loadActiveProfileId, loadProfiles, setActiveProfileId } from '../lib/profiles';
 import { useTheme } from '../lib/ThemeContext';
+import { NewBadge } from './NewBadge';
 
 interface Props {
   onClose: () => void;
@@ -93,7 +94,10 @@ export function SettingsPanel({ onClose }: Props) {
               />
             </label>
             <label className="flex items-center justify-between">
-              <span>近づいたら通知（アプリを開いている間のみ）</span>
+              <span className="flex items-center">
+                近づいたら通知（アプリを開いている間のみ）
+                <NewBadge featureKey="proximity-alerts" />
+              </span>
               <input
                 type="checkbox"
                 checked={preferences.proximityAlerts}
@@ -105,6 +109,26 @@ export function SettingsPanel({ onClose }: Props) {
                     update({ proximityAlerts: false });
                   }
                 }}
+              />
+            </label>
+          </section>
+
+          <section className="space-y-2">
+            <div className="font-bold">サウンド・振動</div>
+            <label className="flex items-center justify-between">
+              <span>バイブレーション</span>
+              <input
+                type="checkbox"
+                checked={preferences.hapticsEnabled}
+                onChange={(e) => update({ hapticsEnabled: e.target.checked })}
+              />
+            </label>
+            <label className="flex items-center justify-between">
+              <span>チェックイン時の効果音</span>
+              <input
+                type="checkbox"
+                checked={preferences.soundEnabled}
+                onChange={(e) => update({ soundEnabled: e.target.checked })}
               />
             </label>
           </section>

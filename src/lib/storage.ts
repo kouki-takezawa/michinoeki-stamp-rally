@@ -49,6 +49,20 @@ export function setCheckinHasPhoto(stationId: string, hasPhoto: boolean): Checki
   return next;
 }
 
+export function removeCheckin(stationId: string): CheckinRecord[] {
+  const next = loadCheckins().filter((r) => r.stationId !== stationId);
+  saveCheckins(next);
+  return next;
+}
+
+export function restoreCheckin(record: CheckinRecord): CheckinRecord[] {
+  const current = loadCheckins();
+  if (current.some((r) => r.stationId === record.stationId)) return current;
+  const next = [...current, record];
+  saveCheckins(next);
+  return next;
+}
+
 export function buildExport(records: CheckinRecord[], favorites: string[]): CheckinExport {
   return {
     app: 'michinoeki-stamp-rally',

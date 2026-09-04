@@ -76,6 +76,16 @@ h3 {
   font-family: var(--font-body);
 }
 
+/* ダークテーマ時はOSMタイル自体が常に白背景のままなので、色調反転で疑似的にダークマップ化する */
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme='light']) .leaflet-tile-pane {
+    filter: invert(1) hue-rotate(180deg) brightness(0.92) contrast(0.9);
+  }
+}
+:root[data-theme='dark'] .leaflet-tile-pane {
+  filter: invert(1) hue-rotate(180deg) brightness(0.92) contrast(0.9);
+}
+
 /* ---- D07: 道路標識モチーフスキン ---- */
 :root[data-skin='roadsign'] {
   --font-display: 'Kosugi Maru', 'Zen Kaku Gothic New', sans-serif;

@@ -2,10 +2,13 @@ import { lazy, Suspense, useEffect, useMemo, useRef, useState } from 'react';
 import stations from '../data/michinoeki.json';
 import { useMediaQuery } from '../hooks/useMediaQuery';
 import { distanceMeters } from '../lib/distance';
+import { capitalOfPrefecture } from '../lib/prefectureCapitals';
+import { loadRecentSearches, loadRecentStationIds, recordRecentSearch } from '../lib/recentActivity';
 import { activeSeasonalEvent } from '../lib/seasonalEvents';
 import type { GeoErrorInfo, GeoPosition, GeoStatus } from '../hooks/useGeolocation';
 import type { Station } from '../lib/types';
 import { BottomSheet } from './BottomSheet';
+import { FilterChips } from './FilterChips';
 import { Footer } from './Footer';
 import { NearbyStrip } from './NearbyStrip';
 import { OfflineMapButton } from './OfflineMapButton';
@@ -69,6 +72,11 @@ export function NearbyScreen({
   const listRef = useRef<HTMLDivElement | null>(null);
   const isDesktop = useMediaQuery('(min-width: 1024px)');
   const seasonalEvent = useMemo(() => activeSeasonalEvent(), []);
+  const [recentSearches, setRecentSearches] = useState(() => loadRecentSearches());
+  const recentStations = useMemo(() => {
+    const ids = loadRecentStationIds();
+    return ids.map((id) => allStations.find((s) => s.id === id)).filter((s): s is Station => !!s);
+  }, []);
 
   const filteredStations = useMemo(() => {
     const q = query.trim();
@@ -78,6 +86,10 @@ export function NearbyScreen({
       .filter((s) => (facility ? (s.facilities ?? []).includes(facility) : true))
       .filter((s) => (unvisitedOnly ? !checkedInIds.has(s.id) : true));
   }, [query, prefecture, facility, unvisitedOnly, checkedInIds]);
+
+  // 都道府県が変わったときだけ再計算する地図フォーカス対象（検索語・設備・未訪問フィルタの変化では発火させない）。
+  // 県庁所在地へカメラを移動させる。未選択時はnull（全国表示に戻す）
+  const focusTarget = useMemo(() => (prefecture ? capitalOfPrefecture(prefecture) ?? null : null), [prefecture]);
 
   const withDistance = useMemo(() => {
     if (!position) return [];
@@ -163,6 +175,27 @@ export function NearbyScreen({
       onFacilityChange={setFacility}
       unvisitedOnly={unvisitedOnly}
       onUnvisitedOnlyChange={setUnvisitedOnly}
+      recentSearches={recentSearches}
+      onCommitSearch={(term) => {
+        if (term.trim()) setRecentSearches(recordRecentSearch(term));
+      }}
+    />
+  );
+
+  const filterChips = (
+    <FilterChips
+      chips={[
+        ...(query.trim() ? [{ key: 'query', label: `「${query}」`, onRemove: () => setQuery('') }] : []),
+        ...(prefecture ? [{ key: 'pref', label: prefecture, onRemove: () => setPrefecture('') }] : []),
+        ...(facility ? [{ key: 'facility', label: facility, onRemove: () => setFacility('') }] : []),
+        ...(unvisitedOnly ? [{ key: 'unvisited', label: '未訪問のみ', onRemove: () => setUnvisitedOnly(false) }] : []),
+      ]}
+      onClearAll={() => {
+        setQuery('');
+        setPrefecture('');
+        setFacility('');
+        setUnvisitedOnly(false);
+      }}
     />
   );
 
@@ -170,6 +203,25 @@ export function NearbyScreen({
     <div className="mb-3 flex items-center gap-1.5 rounded-lg border border-accent/40 bg-accent-soft px-3 py-2 text-xs font-bold text-accent">
       <span aria-hidden="true">{seasonalEvent.emoji}</span>
       {seasonalEvent.title}開催中
+    </div>
+  );
+
+  const recentStationsStrip = !isFiltering && recentStations.length > 0 && (
+    <div className="mb-3">
+      <div className="mb-1.5 text-xs font-bold text-ink-faint">最近見た道の駅</div>
+      <div className="flex gap-2 overflow-x-auto pb-1">
+        {recentStations.map((s) => (
+          <button
+            key={s.id}
+            type="button"
+            onClick={() => onSelect(s.id)}
+            className="flex w-28 shrink-0 flex-col items-start gap-0.5 rounded-lg border border-border bg-surface px-3 py-2 text-left"
+          >
+            <span className="w-full truncate text-xs font-bold">{s.name}</span>
+            <span className="text-[11px] text-ink-faint">{s.prefecture}</span>
+          </button>
+        ))}
+      </div>
     </div>
   );
 
@@ -247,6 +299,8 @@ export function NearbyScreen({
             <>
               <div className="mt-4 mb-3">{locationStatusLine}</div>
               <div className="mb-3">{searchBar}</div>
+              {filterChips}
+              {recentStationsStrip}
               <div className="mb-3">
                 <OfflineMapButton position={{ lat: position.lat, lng: position.lng }} />
               </div>
@@ -259,6 +313,7 @@ export function NearbyScreen({
           <Suspense fallback={MAP_FALLBACK}>
             <MapView
               stations={filteredStations}
+              focusTarget={focusTarget}
               checkedInIds={checkedInIds}
               favorites={favorites}
               userLat={isManualPosition ? undefined : position?.lat}
@@ -301,6 +356,8 @@ export function NearbyScreen({
           {seasonalBanner}
           <div className="mb-2">{locationStatusLine}</div>
           <div className="mb-3">{searchBar}</div>
+          {filterChips}
+          {recentStationsStrip}
           <div className="mb-3">
             <OfflineMapButton position={{ lat: position.lat, lng: position.lng }} />
           </div>

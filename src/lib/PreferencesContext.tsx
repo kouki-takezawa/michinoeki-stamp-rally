@@ -10,6 +10,8 @@ export interface Preferences {
   a11yHighContrast: boolean;
   a11yBigTargets: boolean;
   proximityAlerts: boolean;
+  hapticsEnabled: boolean;
+  soundEnabled: boolean;
 }
 
 const DEFAULTS: Preferences = {
@@ -20,6 +22,8 @@ const DEFAULTS: Preferences = {
   a11yHighContrast: false,
   a11yBigTargets: false,
   proximityAlerts: false,
+  hapticsEnabled: true,
+  soundEnabled: true,
 };
 
 const STORAGE_KEY = 'michinoeki-preferences-v1';

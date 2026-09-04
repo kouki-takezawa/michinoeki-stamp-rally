@@ -8,6 +8,8 @@ import {
   loadCheckins,
   mergeCheckins,
   parseImport,
+  removeCheckin,
+  restoreCheckin,
   setCheckinHasPhoto,
   setCheckinTag,
 } from '../lib/storage';
@@ -49,6 +51,17 @@ export function useCheckins() {
 
   const setHasPhoto = useCallback((stationId: string, hasPhoto: boolean) => {
     setRecords(setCheckinHasPhoto(stationId, hasPhoto));
+  }, []);
+
+  const deleteCheckin = useCallback((stationId: string): CheckinRecord | null => {
+    const record = loadCheckins().find((r) => r.stationId === stationId) ?? null;
+    if (!record) return null;
+    setRecords(removeCheckin(stationId));
+    return record;
+  }, []);
+
+  const undoDeleteCheckin = useCallback((record: CheckinRecord) => {
+    setRecords(restoreCheckin(record));
   }, []);
 
   const exportJson = useCallback(() => {
@@ -102,6 +115,8 @@ export function useCheckins() {
     checkIn,
     setTag,
     setHasPhoto,
+    deleteCheckin,
+    undoDeleteCheckin,
     exportJson,
     importJson,
     prefectureProgress,

@@ -5,6 +5,8 @@ import type { StationWithDistance } from '../lib/types';
 import { HighlightedText } from './HighlightedText';
 
 const DOUBLE_TAP_WINDOW_MS = 300;
+const LONG_PRESS_MS = 500;
+const LONG_PRESS_MOVE_TOLERANCE = 10;
 
 interface Props {
   station: StationWithDistance;
@@ -29,7 +31,35 @@ export function StationListItem({
 }: Props) {
   const eta = estimateEta(station.distanceM);
   const [burst, setBurst] = useState(false);
+  const [menuOpen, setMenuOpen] = useState(false);
   const pendingTap = useRef<number | null>(null);
+  const longPressTimer = useRef<number | null>(null);
+  const longPressStart = useRef<{ x: number; y: number } | null>(null);
+  const navUrl = `https://www.google.com/maps/dir/?api=1&destination=${station.lat},${station.lng}`;
+
+  const clearLongPress = () => {
+    if (longPressTimer.current !== null) {
+      window.clearTimeout(longPressTimer.current);
+      longPressTimer.current = null;
+    }
+    longPressStart.current = null;
+  };
+
+  const handlePointerDown = (e: React.PointerEvent) => {
+    if (e.pointerType === 'mouse') return;
+    longPressStart.current = { x: e.clientX, y: e.clientY };
+    longPressTimer.current = window.setTimeout(() => {
+      longPressTimer.current = null;
+      setMenuOpen(true);
+    }, LONG_PRESS_MS);
+  };
+
+  const handlePointerMove = (e: React.PointerEvent) => {
+    if (!longPressStart.current) return;
+    const dx = e.clientX - longPressStart.current.x;
+    const dy = e.clientY - longPressStart.current.y;
+    if (Math.hypot(dx, dy) > LONG_PRESS_MOVE_TOLERANCE) clearLongPress();
+  };
 
   const handleTap = () => {
     if (pendingTap.current !== null) {
@@ -52,6 +82,14 @@ export function StationListItem({
     <div
       onMouseEnter={() => onHover?.(station.id)}
       onMouseLeave={() => onHover?.(null)}
+      onContextMenu={(e) => {
+        e.preventDefault();
+        setMenuOpen(true);
+      }}
+      onPointerDown={handlePointerDown}
+      onPointerMove={handlePointerMove}
+      onPointerUp={clearLongPress}
+      onPointerLeave={clearLongPress}
       className={`relative flex w-full items-center gap-1 border-b border-border bg-surface last:border-b-0 hover:bg-surface-2 ${
         isHighlighted ? 'ring-2 ring-inset ring-accent' : ''
       }`}
@@ -84,6 +122,32 @@ export function StationListItem({
         >
           ⭐
         </span>
+      )}
+      {menuOpen && (
+        <>
+          <div className="fixed inset-0 z-30" onClick={() => setMenuOpen(false)} />
+          <div className="absolute right-2 top-full z-40 mt-1 min-w-40 overflow-hidden rounded-lg border border-border bg-surface shadow-lg">
+            <a
+              href={navUrl}
+              target="_blank"
+              rel="noreferrer"
+              onClick={() => setMenuOpen(false)}
+              className="block px-4 py-2.5 text-left text-sm font-bold text-ink hover:bg-surface-2"
+            >
+              📍 経路を見る
+            </a>
+            <button
+              type="button"
+              onClick={() => {
+                onToggleFavorite(station.id);
+                setMenuOpen(false);
+              }}
+              className="block w-full px-4 py-2.5 text-left text-sm font-bold text-ink hover:bg-surface-2"
+            >
+              {isFavorite ? '☆ お気に入りから外す' : '★ お気に入りに追加'}
+            </button>
+          </div>
+        </>
       )}
     </div>
   );

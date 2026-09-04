@@ -39,6 +39,7 @@ interface Props {
   onCheckIn: (id: string) => void;
   onSetTag: (id: string, tag: CheckinTag) => void;
   onSetHasPhoto: (id: string, hasPhoto: boolean) => void;
+  onDeleteCheckin: (id: string) => void;
   onToggleFavorite: (id: string) => void;
   onBack: () => void;
 }
@@ -61,6 +62,7 @@ export function StationDetail({
   onCheckIn,
   onSetTag,
   onSetHasPhoto,
+  onDeleteCheckin,
   onToggleFavorite,
   onBack,
 }: Props) {
@@ -85,6 +87,11 @@ export function StationDetail({
     const distanceText = distanceM !== null ? `、現在地から${formatDistance(distanceM)}` : '';
     speak(`${station.name}${distanceText}`);
   }, [station.id, station.name, distanceM, preferences.drivingMode]);
+
+  const [imageFailed, setImageFailed] = useState(false);
+  useEffect(() => {
+    setImageFailed(false);
+  }, [station.id]);
 
   return (
     <div className="mx-auto max-w-xl px-4 py-6">
@@ -113,7 +120,7 @@ export function StationDetail({
         )}
       </div>
       <h1 className="mb-4 text-2xl font-black">
-        <StationName name={station.name} nameKana={station.nameKana} />
+        <StationName name={station.name} />
       </h1>
       {weather?.isRain && (
         <p className="mb-3 rounded-lg bg-surface-2 px-3 py-2 text-xs text-ink-muted">
@@ -121,14 +128,24 @@ export function StationDetail({
         </p>
       )}
 
-      <Suspense fallback={<div className="h-56 w-full rounded-lg border border-border bg-surface-2" />}>
-        <StationMap
-          lat={station.lat}
-          lng={station.lng}
-          userLat={isManualPosition ? undefined : position?.lat}
-          userLng={isManualPosition ? undefined : position?.lng}
+      {station.imageUrl && !imageFailed ? (
+        <img
+          src={station.imageUrl}
+          alt={station.name}
+          loading="lazy"
+          onError={() => setImageFailed(true)}
+          className="h-56 w-full rounded-lg border border-border object-cover"
         />
-      </Suspense>
+      ) : (
+        <Suspense fallback={<div className="h-56 w-full rounded-lg border border-border bg-surface-2" />}>
+          <StationMap
+            lat={station.lat}
+            lng={station.lng}
+            userLat={isManualPosition ? undefined : position?.lat}
+            userLng={isManualPosition ? undefined : position?.lng}
+          />
+        </Suspense>
+      )}
 
       <div className="mt-3 grid grid-cols-2 gap-2">
         <a
@@ -219,6 +236,13 @@ export function StationDetail({
                 （{formatRelativeTime(checkedInAt)}）
               </span>
             )}
+            <button
+              type="button"
+              onClick={() => onDeleteCheckin(station.id)}
+              className="ml-3 text-xs font-normal text-ink-muted underline"
+            >
+              取り消す
+            </button>
           </div>
         ) : (
           <>

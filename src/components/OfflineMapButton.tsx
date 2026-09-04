@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { precacheAreaTiles } from '../lib/tilePrecache';
+import { NewBadge } from './NewBadge';
 
 interface Props {
   position: { lat: number; lng: number };
@@ -31,6 +32,7 @@ export function OfflineMapButton({ position }: Props) {
           : finished
             ? '✓ この周辺の地図を保存しました'
             : '📥 この周辺の地図をオフライン保存'}
+        {!running && !finished && <NewBadge featureKey="offline-map" />}
       </button>
       <p className="mt-1 text-[11px] text-ink-faint">
         電波が弱い場所でも表示できるよう、現在地周辺の地図タイルを端末に保存します。

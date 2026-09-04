@@ -14,6 +14,7 @@ import { GourmetCatalog } from './GourmetCatalog';
 import { HistoryTimeline } from './HistoryTimeline';
 import { ImportExportPanel } from './ImportExportPanel';
 import { OriginPicker } from './OriginPicker';
+import { PhotoAlbum } from './PhotoAlbum';
 import { RecommendedStations } from './RecommendedStations';
 import { ShareButton } from './ShareButton';
 import { StampBook } from './StampBook';
@@ -276,6 +277,8 @@ export function MyPage({
           </div>
         </>
       )}
+
+      <PhotoAlbum checkedStations={checkedStations} onSelect={onSelect} />
 
       <GourmetCatalog stations={stations} onSelect={onSelect} />
 

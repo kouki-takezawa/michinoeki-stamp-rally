@@ -17,9 +17,11 @@ import { useJourney } from './hooks/useJourney';
 import { celebrateBigMilestone, celebrateCheckin, vibrateFavorite } from './lib/celebrate';
 import { distanceMeters, formatDistance } from './lib/distance';
 import type { Milestone } from './lib/milestones';
+import { hasSeenCoachMark, markCoachMarkSeen } from './lib/coachMarks';
 import { hasSeenOnboarding, markOnboardingSeen } from './lib/onboarding';
 import { notifyProximity } from './lib/notifications';
 import { usePreferences } from './lib/PreferencesContext';
+import { recordRecentStation } from './lib/recentActivity';
 import { buildShareCanvas, shareImage } from './lib/share';
 import { speak } from './lib/speech';
 import { useToast } from './lib/ToastContext';
@@ -87,6 +89,8 @@ function App() {
     checkIn,
     setTag,
     setHasPhoto,
+    deleteCheckin,
+    undoDeleteCheckin,
     exportJson,
     importJson,
     prefectureProgress,
@@ -136,6 +140,14 @@ function App() {
     if (milestones.length > 0) setMilestoneQueue(milestones);
   };
 
+  const handleDeleteCheckin = (id: string) => {
+    const removed = deleteCheckin(id);
+    if (!removed) return;
+    show('チェックインを取り消しました', {
+      action: { label: '元に戻す', onClick: () => undoDeleteCheckin(removed) },
+    });
+  };
+
   const handleImport = async (file: File) => {
     const count = await importJson(file);
     show(`${count}件のチェックインを取り込みました`, 'success');
@@ -151,10 +163,18 @@ function App() {
       show(`${station?.name ?? ''}をお気に入りから削除しました`, {
         action: { label: '元に戻す', onClick: () => toggleFavorite(id) },
       });
+    } else if (!hasSeenCoachMark('favorite-toggle')) {
+      markCoachMarkSeen('favorite-toggle');
+      show('お気に入りに追加しました。☆をもう一度押すと解除できます');
     }
   };
 
   const currentMilestone = milestoneQueue[0];
+
+  const selectStation = (id: string) => {
+    recordRecentStation(id);
+    setSelectedId(id);
+  };
 
   // F17: フォアグラウンド限定の近接通知（未訪問の道の駅が1km以内に入ったら1回だけ通知）
   const notifiedIdsRef = useRef<Set<string>>(new Set());
@@ -225,6 +245,7 @@ function App() {
             onCheckIn={handleCheckIn}
             onSetTag={setTag}
             onSetHasPhoto={setHasPhoto}
+            onDeleteCheckin={handleDeleteCheckin}
             onToggleFavorite={handleToggleFavorite}
             onBack={() => setSelectedId(null)}
           />
@@ -252,7 +273,7 @@ function App() {
           checkedInIds={checkedInIds}
           favorites={favorites}
           onToggleFavorite={handleToggleFavorite}
-          onSelect={setSelectedId}
+          onSelect={selectStation}
         />
       ) : (
         <div className="pb-16 lg:pb-0 lg:pl-56">
@@ -274,7 +295,7 @@ function App() {
             totalDistanceM={totalDistanceM}
             onExport={exportJson}
             onImport={handleImport}
-            onSelect={setSelectedId}
+            onSelect={selectStation}
           />
           <Footer />
         </div>

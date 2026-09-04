@@ -10,6 +10,7 @@ export interface Station {
   source: CoordinateSource;
   facilities?: string[];
   officialUrl?: string;
+  imageUrl?: string;
 }
 
 export interface StationWithDistance extends Station {

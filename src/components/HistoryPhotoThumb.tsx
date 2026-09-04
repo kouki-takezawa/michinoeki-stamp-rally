@@ -1,7 +1,12 @@
 import { useEffect, useState } from 'react';
 import { getPhoto } from '../lib/photos';
 
-export function HistoryPhotoThumb({ stationId }: { stationId: string }) {
+interface Props {
+  stationId: string;
+  className?: string;
+}
+
+export function HistoryPhotoThumb({ stationId, className = 'h-10 w-10 shrink-0 rounded object-cover' }: Props) {
   const [url, setUrl] = useState<string | null>(null);
 
   useEffect(() => {
@@ -19,5 +24,5 @@ export function HistoryPhotoThumb({ stationId }: { stationId: string }) {
   }, [stationId]);
 
   if (!url) return null;
-  return <img src={url} alt="" className="h-10 w-10 shrink-0 rounded object-cover" />;
+  return <img src={url} alt="" className={className} />;
 }

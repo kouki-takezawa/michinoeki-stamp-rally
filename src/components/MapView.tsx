@@ -5,6 +5,7 @@ import type { Station } from '../lib/types';
 
 interface Props {
   stations: Station[];
+  focusTarget?: { lat: number; lng: number } | null;
   checkedInIds: Set<string>;
   favorites: Set<string>;
   userLat?: number;
@@ -15,6 +16,7 @@ interface Props {
 
 const DEFAULT_CENTER: [number, number] = [36.2, 138.2];
 const DEFAULT_ZOOM = 5;
+const PREFECTURE_FOCUS_ZOOM = 10;
 const CLUSTER_PIXEL_SIZE = 56;
 
 const userIcon = L.divIcon({
@@ -24,17 +26,28 @@ const userIcon = L.divIcon({
   iconAnchor: [7, 7],
 });
 
-export function MapView({ stations, checkedInIds, favorites, userLat, userLng, highlightedId, onSelect }: Props) {
+export function MapView({
+  stations,
+  focusTarget,
+  checkedInIds,
+  favorites,
+  userLat,
+  userLng,
+  highlightedId,
+  onSelect,
+}: Props) {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const mapRef = useRef<L.Map | null>(null);
   const layerRef = useRef<L.LayerGroup | null>(null);
   const userMarkerRef = useRef<L.Marker | null>(null);
   const hasFlownRef = useRef(false);
   const [tilesLoaded, setTilesLoaded] = useState(false);
+  const [tilesRefreshing, setTilesRefreshing] = useState(false);
 
   const dataRef = useRef({ stations, checkedInIds, favorites, highlightedId, onSelect });
   dataRef.current = { stations, checkedInIds, favorites, highlightedId, onSelect };
   const redrawRef = useRef<() => void>(() => {});
+  const redrawFrameRef = useRef<number | null>(null);
 
   useEffect(() => {
     if (!containerRef.current) return;
@@ -46,18 +59,25 @@ export function MapView({ stations, checkedInIds, favorites, userLat, userLng, h
       maxZoom: 19,
     });
     tiles.on('load', () => setTilesLoaded(true));
+    // ズーム・パンで新しいタイルを読み込み始めるたびに簡易インジケータを出す（初回だけでなく毎回）
+    tiles.on('loading', () => setTilesRefreshing(true));
+    tiles.on('load', () => setTilesRefreshing(false));
     tiles.addTo(map);
 
     const layer = L.layerGroup().addTo(map);
     layerRef.current = layer;
 
-    const redraw = () => {
+    const redrawNow = () => {
       const { stations, checkedInIds, favorites, highlightedId, onSelect } = dataRef.current;
       layer.clearLayers();
 
+      // 表示範囲外の駅は座標変換・クラスタリング計算そのものから除外する（ズームインするほど処理対象が減る）
+      const bounds = map.getBounds().pad(0.25);
+      const visibleStations = stations.filter((s) => bounds.contains([s.lat, s.lng]));
+
       type Bucket = { points: Station[]; sumX: number; sumY: number };
       const buckets = new Map<string, Bucket>();
-      for (const s of stations) {
+      for (const s of visibleStations) {
         const pt = map.latLngToContainerPoint([s.lat, s.lng]);
         const key = `${Math.floor(pt.x / CLUSTER_PIXEL_SIZE)}-${Math.floor(pt.y / CLUSTER_PIXEL_SIZE)}`;
         const bucket = buckets.get(key) ?? { points: [], sumX: 0, sumY: 0 };
@@ -101,19 +121,29 @@ export function MapView({ stations, checkedInIds, favorites, userLat, userLng, h
           const clusterMarker = L.marker([lat, lng], { icon });
           clusterMarker.on('click', () => {
             const bounds = L.latLngBounds(bucket.points.map((s) => [s.lat, s.lng] as [number, number]));
-            map.fitBounds(bounds, { padding: [40, 40], maxZoom: 16 });
+            map.flyToBounds(bounds, { padding: [40, 40], maxZoom: 16, duration: 0.4 });
           });
           clusterMarker.addTo(layer);
         }
       }
     };
+
+    // 実際の再描画は次フレームに回し、ズーム操作自体をブロックしないようにする
+    const redraw = () => {
+      if (redrawFrameRef.current !== null) cancelAnimationFrame(redrawFrameRef.current);
+      redrawFrameRef.current = requestAnimationFrame(() => {
+        redrawFrameRef.current = null;
+        redrawNow();
+      });
+    };
     redrawRef.current = redraw;
 
     map.on('moveend zoomend', redraw);
-    redraw();
+    redrawNow();
 
     return () => {
       map.off('moveend zoomend', redraw);
+      if (redrawFrameRef.current !== null) cancelAnimationFrame(redrawFrameRef.current);
       map.remove();
       mapRef.current = null;
       layerRef.current = null;
@@ -125,6 +155,17 @@ export function MapView({ stations, checkedInIds, favorites, userLat, userLng, h
   useEffect(() => {
     redrawRef.current();
   }, [stations, checkedInIds, favorites, highlightedId]);
+
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map) return;
+    if (focusTarget) {
+      map.flyTo([focusTarget.lat, focusTarget.lng], PREFECTURE_FOCUS_ZOOM, { duration: 0.8 });
+    } else {
+      map.flyTo(DEFAULT_CENTER, DEFAULT_ZOOM, { duration: 0.8 });
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [focusTarget]);
 
   useEffect(() => {
     const map = mapRef.current;
@@ -152,6 +193,25 @@ export function MapView({ stations, checkedInIds, favorites, userLat, userLng, h
       {!tilesLoaded && (
         <div className="absolute inset-0 animate-pulse bg-surface-2" aria-hidden="true" />
       )}
+      {tilesLoaded && tilesRefreshing && (
+        <div className="pulse-dot pointer-events-none absolute right-3 top-3 z-10 rounded-full bg-surface/90 px-2 py-1 text-[10px] font-bold text-ink-muted shadow-sm">
+          地図を読み込み中…
+        </div>
+      )}
+      <div className="pointer-events-none absolute bottom-3 left-3 z-10 flex gap-2 rounded-lg bg-surface/90 px-2.5 py-1.5 text-[10px] font-bold text-ink-muted shadow-sm">
+        <span className="flex items-center gap-1">
+          <span className="h-2 w-2 rounded-full border border-ink-faint" aria-hidden="true" />
+          未訪問
+        </span>
+        <span className="flex items-center gap-1">
+          <span className="h-2 w-2 rounded-full bg-[#3c7a37]" aria-hidden="true" />
+          訪問済み
+        </span>
+        <span className="flex items-center gap-1">
+          <span className="h-2 w-2 rounded-full bg-[#c9781f]" aria-hidden="true" />
+          お気に入り
+        </span>
+      </div>
     </div>
   );
 }
