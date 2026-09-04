@@ -2,10 +2,13 @@ import { lazy, Suspense, useEffect, useMemo, useRef, useState } from 'react';
 import stations from '../data/michinoeki.json';
 import { useMediaQuery } from '../hooks/useMediaQuery';
 import { distanceMeters } from '../lib/distance';
+import { activeSeasonalEvent } from '../lib/seasonalEvents';
 import type { GeoErrorInfo, GeoPosition, GeoStatus } from '../hooks/useGeolocation';
 import type { Station } from '../lib/types';
 import { BottomSheet } from './BottomSheet';
 import { Footer } from './Footer';
+import { NearbyStrip } from './NearbyStrip';
+import { OfflineMapButton } from './OfflineMapButton';
 import { PrefecturePicker } from './PrefecturePicker';
 import { SearchFilterBar } from './SearchFilterBar';
 import { StationListSkeleton } from './Skeleton';
@@ -58,20 +61,23 @@ export function NearbyScreen({
 }: Props) {
   const [query, setQuery] = useState('');
   const [prefecture, setPrefecture] = useState('');
+  const [facility, setFacility] = useState('');
   const [unvisitedOnly, setUnvisitedOnly] = useState(false);
   const [showPrefecturePicker, setShowPrefecturePicker] = useState(false);
   const [hoveredId, setHoveredId] = useState<string | null>(null);
   const [focusedIndex, setFocusedIndex] = useState(-1);
   const listRef = useRef<HTMLDivElement | null>(null);
   const isDesktop = useMediaQuery('(min-width: 1024px)');
+  const seasonalEvent = useMemo(() => activeSeasonalEvent(), []);
 
   const filteredStations = useMemo(() => {
     const q = query.trim();
     return allStations
-      .filter((s) => (q ? s.name.includes(q) : true))
+      .filter((s) => (q ? s.name.includes(q) || s.nameKana?.includes(q) : true))
       .filter((s) => (prefecture ? s.prefecture === prefecture : true))
+      .filter((s) => (facility ? (s.facilities ?? []).includes(facility) : true))
       .filter((s) => (unvisitedOnly ? !checkedInIds.has(s.id) : true));
-  }, [query, prefecture, unvisitedOnly, checkedInIds]);
+  }, [query, prefecture, facility, unvisitedOnly, checkedInIds]);
 
   const withDistance = useMemo(() => {
     if (!position) return [];
@@ -80,12 +86,12 @@ export function NearbyScreen({
       .sort((a, b) => a.distanceM - b.distanceM);
   }, [filteredStations, position]);
 
-  const isFiltering = query.trim() !== '' || prefecture !== '' || unvisitedOnly;
+  const isFiltering = query.trim() !== '' || prefecture !== '' || facility !== '' || unvisitedOnly;
   const visibleList = withDistance.slice(0, isFiltering ? FILTERED_LIMIT : DEFAULT_LIMIT);
 
   useEffect(() => {
     setFocusedIndex(-1);
-  }, [query, prefecture, unvisitedOnly]);
+  }, [query, prefecture, facility, unvisitedOnly]);
 
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
@@ -153,9 +159,18 @@ export function NearbyScreen({
       prefecture={prefecture}
       onPrefectureChange={setPrefecture}
       prefectures={PREFECTURES}
+      facility={facility}
+      onFacilityChange={setFacility}
       unvisitedOnly={unvisitedOnly}
       onUnvisitedOnlyChange={setUnvisitedOnly}
     />
+  );
+
+  const seasonalBanner = seasonalEvent && (
+    <div className="mb-3 flex items-center gap-1.5 rounded-lg border border-accent/40 bg-accent-soft px-3 py-2 text-xs font-bold text-accent">
+      <span aria-hidden="true">{seasonalEvent.emoji}</span>
+      {seasonalEvent.title}開催中
+    </div>
   );
 
   const locationStatusLine = position ? (
@@ -226,11 +241,15 @@ export function NearbyScreen({
           <p className="mb-4 text-sm text-ink-muted">
             全国{allStations.length}件の道の駅から、現在地に近い順に探せます。矢印キーで移動、Enterで詳細を開けます。
           </p>
+          {seasonalBanner}
           {locationCta}
           {position && (
             <>
               <div className="mt-4 mb-3">{locationStatusLine}</div>
               <div className="mb-3">{searchBar}</div>
+              <div className="mb-3">
+                <OfflineMapButton position={{ lat: position.lat, lng: position.lng }} />
+              </div>
               {renderList(DEFAULT_LIMIT, '条件に一致する道の駅が見つかりませんでした。')}
             </>
           )}
@@ -274,8 +293,17 @@ export function NearbyScreen({
       )}
 
       {position && (
-        <BottomSheet header={searchBar}>
+        <BottomSheet
+          header={
+            <NearbyStrip stations={withDistance.slice(0, 8)} checkedInIds={checkedInIds} onSelect={onSelect} />
+          }
+        >
+          {seasonalBanner}
           <div className="mb-2">{locationStatusLine}</div>
+          <div className="mb-3">{searchBar}</div>
+          <div className="mb-3">
+            <OfflineMapButton position={{ lat: position.lat, lng: position.lng }} />
+          </div>
           {renderList(DEFAULT_LIMIT, '条件に一致する道の駅が見つかりませんでした。')}
           <Footer />
         </BottomSheet>

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useJapanProjection } from '../../hooks/useJapanProjection';
 import { useMapPanZoom, type ViewBox } from '../../hooks/useMapPanZoom';
 import { distanceMeters } from '../../lib/distance';
@@ -36,12 +36,40 @@ export function StampMapCanvas({
   const { projection, prefBBoxes, registerPath } = useJapanProjection(stations);
   const [showHeatmap, setShowHeatmap] = useState(false);
   const [rouletteHighlight, setRouletteHighlight] = useState<{ id: string; name: string } | null>(null);
+  const [isSpinning, setIsSpinning] = useState(false);
   const [focusedId, setFocusedId] = useState<string | null>(null);
   const [stampingId, setStampingId] = useState<string | null>(null);
   const [sparklePrefecture, setSparklePrefecture] = useState<string | null>(null);
   const [timelapseCount, setTimelapseCount] = useState<number | null>(null);
   const [activeRegion, setActiveRegion] = useState<string | null>(null);
   const { svgRef, viewBox, handlers, zoomTo, reset } = useMapPanZoom(BASE_VIEWBOX);
+
+  // D13: タイムラプス再生中にカメラを各訪問地点へ滑らかにパン・ズームする演出（映画のフライオーバー風）
+  const viewBoxRef = useRef(viewBox);
+  useEffect(() => {
+    viewBoxRef.current = viewBox;
+  }, [viewBox]);
+  const flyAnimRef = useRef<number | null>(null);
+  const flyTo = useCallback(
+    (target: ViewBox, duration: number) => {
+      if (flyAnimRef.current !== null) cancelAnimationFrame(flyAnimRef.current);
+      const start = viewBoxRef.current;
+      const startTime = performance.now();
+      const step = (now: number) => {
+        const t = Math.min(1, (now - startTime) / duration);
+        const ease = 1 - (1 - t) * (1 - t);
+        zoomTo({
+          x: start.x + (target.x - start.x) * ease,
+          y: start.y + (target.y - start.y) * ease,
+          w: start.w + (target.w - start.w) * ease,
+          h: start.h + (target.h - start.h) * ease,
+        });
+        flyAnimRef.current = t < 1 ? requestAnimationFrame(step) : null;
+      };
+      flyAnimRef.current = requestAnimationFrame(step);
+    },
+    [zoomTo],
+  );
 
   const orderedCheckins = useMemo(
     () => [...checkedStations].sort((a, b) => a.checkedInAt.localeCompare(b.checkedInAt)),
@@ -59,6 +87,29 @@ export function StampMapCanvas({
   }, [timelapseCount, orderedCheckins.length]);
 
   const isPlaying = timelapseCount !== null;
+
+  useEffect(() => {
+    if (!isPlaying || !projection) return;
+    const idx = (timelapseCount ?? 1) - 1;
+    if (idx < 0 || idx >= orderedCheckins.length) {
+      flyTo(BASE_VIEWBOX, 700);
+      return;
+    }
+    const target = orderedCheckins[idx];
+    const p = projection.project(target.lng, target.lat);
+    const w = BASE_VIEWBOX.w * 0.16;
+    const h = w * (BASE_VIEWBOX.h / BASE_VIEWBOX.w);
+    flyTo({ x: p.x - w / 2, y: p.y - h / 2, w, h }, 320);
+  }, [timelapseCount, isPlaying, projection, orderedCheckins, flyTo]);
+
+  const wasPlayingRef = useRef(false);
+  useEffect(() => {
+    if (wasPlayingRef.current && !isPlaying) {
+      flyTo(BASE_VIEWBOX, 700);
+    }
+    wasPlayingRef.current = isPlaying;
+  }, [isPlaying, flyTo]);
+
   const visibleCheckedIds = isPlaying
     ? new Set(orderedCheckins.slice(0, timelapseCount ?? 0).map((s) => s.id))
     : checkedInIds;
@@ -189,11 +240,23 @@ export function StampMapCanvas({
   const handleRoulette = () => {
     const picked = pickRouletteStation(stations, checkedInIds, position);
     if (!picked || !projection) return;
-    const p = projection.project(picked.lng, picked.lat);
-    setRouletteHighlight({ id: picked.id, name: picked.name });
-    setFocusedId(picked.id);
-    setActiveRegion(picked.prefecture);
-    zoomTo({ x: p.x - 12, y: p.y - 12, w: 24, h: 24 });
+
+    setIsSpinning(true);
+    let ticks = 0;
+    const spinTimer = window.setInterval(() => {
+      const random = stations[Math.floor(Math.random() * stations.length)];
+      setRouletteHighlight({ id: random.id, name: random.name });
+      ticks++;
+      if (ticks >= 10) {
+        window.clearInterval(spinTimer);
+        setIsSpinning(false);
+        const p = projection.project(picked.lng, picked.lat);
+        setRouletteHighlight({ id: picked.id, name: picked.name });
+        setFocusedId(picked.id);
+        setActiveRegion(picked.prefecture);
+        zoomTo({ x: p.x - 12, y: p.y - 12, w: 24, h: 24 });
+      }
+    }, 90);
   };
 
   const focusOnStation = (s: CheckedStation) => {
@@ -282,6 +345,7 @@ export function StampMapCanvas({
                 fill={started ? 'var(--color-accent-soft)' : 'var(--color-surface-2)'}
                 stroke={complete ? '#c9a227' : 'var(--color-border)'}
                 strokeWidth={complete ? 1.1 : 0.5}
+                className={sparklePrefecture === name ? 'territory-flash' : undefined}
               />
             );
           })}
@@ -363,7 +427,7 @@ export function StampMapCanvas({
 
         {rouletteHighlight && !isPlaying && (
           <div className="absolute bottom-2 left-1/2 -translate-x-1/2 rounded-full bg-surface px-3 py-1.5 text-xs font-bold shadow">
-            🎯 {rouletteHighlight.name}
+            {isSpinning ? '🎰' : '🎯'} {rouletteHighlight.name}
           </div>
         )}
         {isPlaying && (

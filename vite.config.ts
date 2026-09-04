@@ -20,6 +20,20 @@ export default defineConfig({
         display: 'standalone',
         lang: 'ja',
         icons: [{ src: '/icon.svg', sizes: 'any', type: 'image/svg+xml', purpose: 'any' }],
+        shortcuts: [
+          {
+            name: '近くの道の駅',
+            short_name: '近くの道の駅',
+            url: '/?tab=nearby',
+            icons: [{ src: '/icon.svg', sizes: 'any' }],
+          },
+          {
+            name: 'マイページ',
+            short_name: 'マイページ',
+            url: '/?tab=mypage',
+            icons: [{ src: '/icon.svg', sizes: 'any' }],
+          },
+        ],
       },
       workbox: {
         globPatterns: ['**/*.{js,css,html,svg,json}'],

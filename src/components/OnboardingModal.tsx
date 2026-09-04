@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 
 interface Slide {
   emoji: string;
@@ -7,6 +7,11 @@ interface Slide {
 }
 
 const SLIDES: Slide[] = [
+  {
+    emoji: '🚙',
+    title: 'ようこそ！',
+    body: '道の駅診断・スタンプラリーは、全国の道の駅を巡ってスタンプを集めるドライブのお供アプリです。',
+  },
   {
     emoji: '🔍',
     title: '近くの道の駅を探す',
@@ -32,6 +37,10 @@ export function OnboardingModal({ onFinish }: Props) {
   const [index, setIndex] = useState(0);
   const slide = SLIDES[index];
   const isLast = index === SLIDES.length - 1;
+  const touchStartX = useRef<number | null>(null);
+
+  const goNext = () => (isLast ? onFinish() : setIndex((i) => i + 1));
+  const goPrev = () => setIndex((i) => Math.max(0, i - 1));
 
   return (
     <div
@@ -39,9 +48,19 @@ export function OnboardingModal({ onFinish }: Props) {
       role="dialog"
       aria-modal="true"
       aria-labelledby="onboarding-title"
+      onTouchStart={(e) => {
+        touchStartX.current = e.touches[0].clientX;
+      }}
+      onTouchEnd={(e) => {
+        if (touchStartX.current === null) return;
+        const dx = e.changedTouches[0].clientX - touchStartX.current;
+        touchStartX.current = null;
+        if (dx < -40) goNext();
+        else if (dx > 40) goPrev();
+      }}
     >
       <div className="w-full max-w-sm rounded-2xl bg-surface p-6 text-center shadow-xl">
-        <div className="mb-4 text-5xl" aria-hidden="true">
+        <div key={slide.title} className="onboarding-emoji mb-4 text-6xl" aria-hidden="true">
           {slide.emoji}
         </div>
         <h2 id="onboarding-title" className="mb-2 text-xl font-black">
@@ -64,7 +83,7 @@ export function OnboardingModal({ onFinish }: Props) {
           {index > 0 && (
             <button
               type="button"
-              onClick={() => setIndex((i) => i - 1)}
+              onClick={goPrev}
               className="flex-1 rounded-lg border border-border py-2.5 text-sm font-bold text-ink-muted"
             >
               戻る
@@ -72,7 +91,7 @@ export function OnboardingModal({ onFinish }: Props) {
           )}
           <button
             type="button"
-            onClick={() => (isLast ? onFinish() : setIndex((i) => i + 1))}
+            onClick={goNext}
             className="flex-1 rounded-lg bg-accent py-2.5 text-sm font-bold text-white"
           >
             {isLast ? 'はじめる' : '次へ'}

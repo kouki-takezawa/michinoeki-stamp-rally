@@ -3,6 +3,7 @@ export type CoordinateSource = 'mlit' | 'osm' | 'approx';
 export interface Station {
   id: string;
   name: string;
+  nameKana?: string;
   prefecture: string;
   lat: number;
   lng: number;

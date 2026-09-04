@@ -1,10 +1,11 @@
+import { profileScopedKey } from './profiles';
 import type { CheckinExport, CheckinRecord, CheckinTag } from './types';
 
-const STORAGE_KEY = 'michinoeki-checkins-v1';
+const BASE_KEY = 'michinoeki-checkins-v1';
 
 export function loadCheckins(): CheckinRecord[] {
   try {
-    const raw = localStorage.getItem(STORAGE_KEY);
+    const raw = localStorage.getItem(profileScopedKey(BASE_KEY));
     if (!raw) return [];
     const parsed = JSON.parse(raw);
     if (!Array.isArray(parsed)) return [];
@@ -19,7 +20,7 @@ export function loadCheckins(): CheckinRecord[] {
 
 function saveCheckins(records: CheckinRecord[]): void {
   try {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(records));
+    localStorage.setItem(profileScopedKey(BASE_KEY), JSON.stringify(records));
   } catch {
     // 保存不可（プライベートモード等）でもアプリ自体は動作継続する
     console.error('チェックイン履歴の保存に失敗しました');

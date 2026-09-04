@@ -1,3 +1,7 @@
+import { FACILITY_ICON } from '../lib/facilityIcons';
+
+const FACILITY_OPTIONS = Object.keys(FACILITY_ICON);
+
 interface Props {
   query: string;
   onQueryChange: (v: string) => void;
@@ -6,6 +10,8 @@ interface Props {
   prefectures: string[];
   unvisitedOnly: boolean;
   onUnvisitedOnlyChange: (v: boolean) => void;
+  facility?: string;
+  onFacilityChange?: (v: string) => void;
 }
 
 export function SearchFilterBar({
@@ -16,9 +22,11 @@ export function SearchFilterBar({
   prefectures,
   unvisitedOnly,
   onUnvisitedOnlyChange,
+  facility = '',
+  onFacilityChange,
 }: Props) {
   return (
-    <div className="mb-4 flex flex-col gap-2 sm:flex-row">
+    <div className="mb-4 flex flex-col gap-2 sm:flex-row sm:flex-wrap">
       <input
         type="search"
         value={query}
@@ -40,6 +48,21 @@ export function SearchFilterBar({
           </option>
         ))}
       </select>
+      {onFacilityChange && (
+        <select
+          value={facility}
+          onChange={(e) => onFacilityChange(e.target.value)}
+          aria-label="設備で絞り込み"
+          className="rounded-lg border border-border bg-surface px-3 py-2 text-sm"
+        >
+          <option value="">すべての設備</option>
+          {FACILITY_OPTIONS.map((f) => (
+            <option key={f} value={f}>
+              {FACILITY_ICON[f]} {f}
+            </option>
+          ))}
+        </select>
+      )}
       <label className="flex items-center gap-2 rounded-lg border border-border bg-surface px-3 py-2 text-sm whitespace-nowrap">
         <input
           type="checkbox"

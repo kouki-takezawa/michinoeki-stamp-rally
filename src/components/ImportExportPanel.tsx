@@ -50,6 +50,9 @@ export function ImportExportPanel({ onExport, onImport }: Props) {
           onChange={handleFileChange}
         />
       </div>
+      <p className="mt-3 text-[11px] text-ink-faint">
+        インポートは既存の記録に追加でマージされます。同乗者が別の端末でエクスポートしたファイルを読み込めば、グループ全員分のチェックインを1つの記録にまとめられます。
+      </p>
     </div>
   );
 }

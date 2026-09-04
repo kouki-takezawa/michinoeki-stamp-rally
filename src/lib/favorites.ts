@@ -1,8 +1,10 @@
-const STORAGE_KEY = 'michinoeki-favorites-v1';
+import { profileScopedKey } from './profiles';
+
+const BASE_KEY = 'michinoeki-favorites-v1';
 
 export function loadFavorites(): Set<string> {
   try {
-    const raw = localStorage.getItem(STORAGE_KEY);
+    const raw = localStorage.getItem(profileScopedKey(BASE_KEY));
     if (!raw) return new Set();
     const parsed = JSON.parse(raw);
     return Array.isArray(parsed) ? new Set(parsed.filter((v): v is string => typeof v === 'string')) : new Set();
@@ -13,7 +15,7 @@ export function loadFavorites(): Set<string> {
 
 function saveFavorites(ids: Set<string>): void {
   try {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(Array.from(ids)));
+    localStorage.setItem(profileScopedKey(BASE_KEY), JSON.stringify(Array.from(ids)));
   } catch {
     console.error('お気に入りの保存に失敗しました');
   }

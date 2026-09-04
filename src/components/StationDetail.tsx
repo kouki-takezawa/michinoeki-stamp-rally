@@ -1,13 +1,22 @@
-import { lazy, Suspense } from 'react';
+import { lazy, Suspense, useEffect, useRef, useState } from 'react';
 import { evaluateCheckin } from '../lib/checkin';
 import { formatDistance } from '../lib/distance';
 import { estimateEta } from '../lib/eta';
 import { FACILITY_ICON } from '../lib/facilityIcons';
+import { usePreferences } from '../lib/PreferencesContext';
 import { formatRelativeTime } from '../lib/relativeTime';
+import { regionOfPrefecture } from '../lib/regions';
+import { speak } from '../lib/speech';
+import { pickTrivia } from '../lib/trivia';
+import { weatherEmoji } from '../lib/weather';
+import { useWeather } from '../hooks/useWeather';
 import type { GeoPosition } from '../hooks/useGeolocation';
 import type { CheckinTag, Station } from '../lib/types';
+import { GourmetNoteInput } from './GourmetNoteInput';
 import { PhotoPicker } from './PhotoPicker';
+import { PlanVisitButton } from './PlanVisitButton';
 import { ShareButton } from './ShareButton';
+import { StationName } from './StationName';
 import { TagPicker } from './TagPicker';
 
 const StationMap = lazy(() => import('./StationMap').then((m) => ({ default: m.StationMap })));
@@ -62,6 +71,20 @@ export function StationDetail({
   );
   const eta = distanceM !== null ? estimateEta(distanceM) : null;
   const navUrl = `https://www.google.com/maps/dir/?api=1&destination=${station.lat},${station.lng}`;
+  const [trivia, setTrivia] = useState(() => pickTrivia(regionOfPrefecture(station.prefecture)?.name));
+  useEffect(() => {
+    setTrivia(pickTrivia(regionOfPrefecture(station.prefecture)?.name));
+  }, [station.id, station.prefecture]);
+  const weather = useWeather(station.lat, station.lng);
+  const { preferences } = usePreferences();
+
+  const lastSpokenIdRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (!preferences.drivingMode || lastSpokenIdRef.current === station.id) return;
+    lastSpokenIdRef.current = station.id;
+    const distanceText = distanceM !== null ? `、現在地から${formatDistance(distanceM)}` : '';
+    speak(`${station.name}${distanceText}`);
+  }, [station.id, station.name, distanceM, preferences.drivingMode]);
 
   return (
     <div className="mx-auto max-w-xl px-4 py-6">
@@ -80,8 +103,23 @@ export function StationDetail({
         </button>
       </div>
 
-      <div className="mb-1 text-xs font-bold tracking-wide text-accent">{station.prefecture}</div>
-      <h1 className="mb-4 text-2xl font-black">{station.name}</h1>
+      <div className="mb-1 flex items-center justify-between">
+        <span className="text-xs font-bold tracking-wide text-accent">{station.prefecture}</span>
+        {weather && (
+          <span className="flex items-center gap-1 text-xs font-bold text-ink-muted">
+            <span aria-hidden="true">{weatherEmoji(weather.weatherCode)}</span>
+            {Math.round(weather.temperatureC)}°C
+          </span>
+        )}
+      </div>
+      <h1 className="mb-4 text-2xl font-black">
+        <StationName name={station.name} nameKana={station.nameKana} />
+      </h1>
+      {weather?.isRain && (
+        <p className="mb-3 rounded-lg bg-surface-2 px-3 py-2 text-xs text-ink-muted">
+          🌧️ 雨の予報です。屋内の休憩スペースがある施設か事前に確認しておくと安心です。
+        </p>
+      )}
 
       <Suspense fallback={<div className="h-56 w-full rounded-lg border border-border bg-surface-2" />}>
         <StationMap
@@ -133,10 +171,23 @@ export function StationDetail({
         </div>
       )}
 
+      <div className="mt-4 rounded-lg border border-border bg-accent-soft/50 p-3 text-sm">
+        <div className="mb-1 text-xs font-bold text-accent">💡 {trivia.region}の豆知識</div>
+        <p className="text-ink-muted">{trivia.text}</p>
+      </div>
+
       <div className="mt-4 grid grid-cols-2 gap-3 text-sm">
         <div className="rounded-lg border border-border bg-surface p-3">
-          <div className="text-ink-faint">現在地からの距離</div>
-          <div className="text-lg font-bold">
+          <div className="flex items-center gap-1.5 text-ink-faint">
+            現在地からの距離
+            {!isManualPosition && distanceM !== null && (
+              <span className="flex items-center gap-1 text-[10px] font-bold text-accent">
+                <span className="pulse-dot h-1.5 w-1.5 rounded-full bg-accent" />
+                LIVE
+              </span>
+            )}
+          </div>
+          <div className="text-lg font-bold tabular-nums">
             {distanceM !== null ? formatDistance(distanceM) : '取得中…'}
           </div>
           {eta && (
@@ -152,6 +203,12 @@ export function StationDetail({
           </div>
         </div>
       </div>
+
+      {!isCheckedIn && (
+        <div className="mt-3">
+          <PlanVisitButton stationName={station.name} prefecture={station.prefecture} />
+        </div>
+      )}
 
       <div className="mt-6">
         {isCheckedIn ? (
@@ -194,6 +251,7 @@ export function StationDetail({
           <div>
             <PhotoPicker stationId={station.id} onChange={(has) => onSetHasPhoto(station.id, has)} />
           </div>
+          <GourmetNoteInput stationId={station.id} />
           <ShareButton
             headline={`${station.name}にチェックイン`}
             subline={station.prefecture}

@@ -5,6 +5,7 @@ export type TabKey = 'nearby' | 'mypage';
 interface Props {
   active: TabKey;
   onChange: (tab: TabKey) => void;
+  onOpenSettings: () => void;
 }
 
 const TABS: { key: TabKey; label: string; icon: string }[] = [
@@ -12,7 +13,7 @@ const TABS: { key: TabKey; label: string; icon: string }[] = [
   { key: 'mypage', label: 'マイページ', icon: '🗺️' },
 ];
 
-export function TabBar({ active, onChange }: Props) {
+export function TabBar({ active, onChange, onOpenSettings }: Props) {
   return (
     <>
       {/* デスクトップ：左サイドバー */}
@@ -35,6 +36,14 @@ export function TabBar({ active, onChange }: Props) {
               {t.label}
             </button>
           ))}
+          <button
+            type="button"
+            onClick={onOpenSettings}
+            className="flex items-center gap-3 rounded-lg px-3 py-2.5 text-left text-sm font-bold text-ink-muted hover:bg-surface-2 hover:text-ink"
+          >
+            <span aria-hidden="true">⚙️</span>
+            設定
+          </button>
         </div>
         <div className="mt-auto pt-4">
           <ThemeToggle />
@@ -62,6 +71,16 @@ export function TabBar({ active, onChange }: Props) {
             {t.label}
           </button>
         ))}
+        <button
+          type="button"
+          onClick={onOpenSettings}
+          className="flex flex-1 flex-col items-center gap-0.5 py-2.5 text-xs font-bold text-ink-faint"
+        >
+          <span className="text-lg" aria-hidden="true">
+            ⚙️
+          </span>
+          設定
+        </button>
         <div className="pr-3">
           <ThemeToggle compact />
         </div>

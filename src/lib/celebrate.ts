@@ -15,6 +15,11 @@ export function celebrateCheckin(): void {
   });
 }
 
+// D15: 操作ごとに触覚フィードバックを差別化する（チェックイン=三連、お気に入り=単発の短い振動）
+export function vibrateFavorite(): void {
+  if (navigator.vibrate) navigator.vibrate(15);
+}
+
 export function celebrateBigMilestone(): void {
   if (navigator.vibrate) navigator.vibrate([40, 60, 40, 60, 80]);
   const duration = 1500;

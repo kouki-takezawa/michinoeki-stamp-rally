@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import stations from './data/michinoeki.json';
 import { DetailOverlay } from './components/DetailOverlay';
 import { Footer } from './components/Footer';
@@ -9,22 +9,30 @@ import { NearbyScreen } from './components/NearbyScreen';
 import { OnboardingModal } from './components/OnboardingModal';
 import { StationDetail } from './components/StationDetail';
 import { TabBar, type TabKey } from './components/TabBar';
+import { SettingsPanel } from './components/SettingsPanel';
 import { useCheckins } from './hooks/useCheckins';
 import { useFavorites } from './hooks/useFavorites';
 import { useGeolocation } from './hooks/useGeolocation';
-import { celebrateBigMilestone, celebrateCheckin } from './lib/celebrate';
-import { distanceMeters } from './lib/distance';
+import { useJourney } from './hooks/useJourney';
+import { celebrateBigMilestone, celebrateCheckin, vibrateFavorite } from './lib/celebrate';
+import { distanceMeters, formatDistance } from './lib/distance';
 import type { Milestone } from './lib/milestones';
 import { hasSeenOnboarding, markOnboardingSeen } from './lib/onboarding';
+import { notifyProximity } from './lib/notifications';
+import { usePreferences } from './lib/PreferencesContext';
 import { buildShareCanvas, shareImage } from './lib/share';
+import { speak } from './lib/speech';
 import { useToast } from './lib/ToastContext';
 import type { Station } from './lib/types';
 
 const allStations = stations as Station[];
 const TAB_STORAGE_KEY = 'michinoeki-active-tab-v1';
+const PROXIMITY_THRESHOLD_M = 1000;
 
 function loadTab(): TabKey {
   try {
+    const fromUrl = new URLSearchParams(window.location.search).get('tab');
+    if (fromUrl === 'nearby' || fromUrl === 'mypage') return fromUrl;
     const raw = localStorage.getItem(TAB_STORAGE_KEY);
     if (raw === 'nearby' || raw === 'mypage') return raw;
   } catch {
@@ -88,6 +96,9 @@ function App() {
     totalCount,
   } = useCheckins();
   const { favorites, toggle: toggleFavorite } = useFavorites();
+  const { origin, setOrigin, removeOrigin, totalDistanceM } = useJourney(checkedStations);
+  const [showSettings, setShowSettings] = useState(false);
+  const { preferences } = usePreferences();
 
   const isManualPosition = manualPosition !== null;
   const position = useMemo(
@@ -116,6 +127,7 @@ function App() {
   const handleCheckIn = (id: string) => {
     const milestones = checkIn(id);
     show('チェックインしました！', 'success');
+    if (preferences.drivingMode) speak('チェックインしました');
     if (milestones.some((m) => m.kind === 'all-prefectures')) {
       celebrateBigMilestone();
     } else {
@@ -132,6 +144,7 @@ function App() {
 
   const handleToggleFavorite = (id: string) => {
     const wasFavorite = favorites.has(id);
+    vibrateFavorite();
     toggleFavorite(id);
     if (wasFavorite) {
       const station = allStations.find((s) => s.id === id);
@@ -142,6 +155,33 @@ function App() {
   };
 
   const currentMilestone = milestoneQueue[0];
+
+  // F17: フォアグラウンド限定の近接通知（未訪問の道の駅が1km以内に入ったら1回だけ通知）
+  const notifiedIdsRef = useRef<Set<string>>(new Set());
+  useEffect(() => {
+    if (!preferences.proximityAlerts || isManualPosition || !gpsPosition) return;
+    for (const s of allStations) {
+      if (checkedInIds.has(s.id) || notifiedIdsRef.current.has(s.id)) continue;
+      const distanceM = distanceMeters(gpsPosition.lat, gpsPosition.lng, s.lat, s.lng);
+      if (distanceM <= PROXIMITY_THRESHOLD_M) {
+        notifiedIdsRef.current.add(s.id);
+        notifyProximity(s.name, formatDistance(distanceM));
+      }
+    }
+  }, [gpsPosition, isManualPosition, checkedInIds, preferences.proximityAlerts]);
+
+  // D20: ホーム画面アイコンに連続記録日数をバッジ表示（対応ブラウザのみ。ホームウィジェットの簡易代替）
+  useEffect(() => {
+    const nav = navigator as Navigator & {
+      setAppBadge?: (n: number) => Promise<void>;
+      clearAppBadge?: () => Promise<void>;
+    };
+    if (streak > 0) {
+      nav.setAppBadge?.(streak).catch(() => {});
+    } else {
+      nav.clearAppBadge?.().catch(() => {});
+    }
+  }, [streak]);
 
   return (
     <div className="min-h-screen bg-bg text-ink">
@@ -191,7 +231,9 @@ function App() {
         </DetailOverlay>
       )}
 
-      <TabBar active={tab} onChange={setTab} />
+      {showSettings && <SettingsPanel onClose={() => setShowSettings(false)} />}
+
+      <TabBar active={tab} onChange={setTab} onOpenSettings={() => setShowSettings(true)} />
       {tab === 'nearby' ? (
         <NearbyScreen
           position={position}
@@ -226,6 +268,10 @@ function App() {
             favorites={favorites}
             checkedInIds={checkedInIds}
             position={isManualPosition ? null : position}
+            origin={origin}
+            onSetOrigin={setOrigin}
+            onRemoveOrigin={removeOrigin}
+            totalDistanceM={totalDistanceM}
             onExport={exportJson}
             onImport={handleImport}
             onSelect={setSelectedId}
