@@ -1,5 +1,6 @@
 import { useMemo, useState } from 'react';
 import stations from './data/michinoeki.json';
+import { DetailOverlay } from './components/DetailOverlay';
 import { Footer } from './components/Footer';
 import { InstallBanner } from './components/InstallBanner';
 import { MilestoneModal } from './components/MilestoneModal';
@@ -129,6 +130,17 @@ function App() {
     return count;
   };
 
+  const handleToggleFavorite = (id: string) => {
+    const wasFavorite = favorites.has(id);
+    toggleFavorite(id);
+    if (wasFavorite) {
+      const station = allStations.find((s) => s.id === id);
+      show(`${station?.name ?? ''}をお気に入りから削除しました`, {
+        action: { label: '元に戻す', onClick: () => toggleFavorite(id) },
+      });
+    }
+  };
+
   const currentMilestone = milestoneQueue[0];
 
   return (
@@ -159,65 +171,67 @@ function App() {
         />
       )}
 
-      {selectedStation ? (
-        <StationDetail
-          station={selectedStation}
-          distanceM={selectedDistance}
+      {selectedStation && (
+        <DetailOverlay onClose={() => setSelectedId(null)}>
+          <StationDetail
+            station={selectedStation}
+            distanceM={selectedDistance}
+            position={position}
+            isManualPosition={isManualPosition}
+            isCheckedIn={checkedInIds.has(selectedStation.id)}
+            checkedInAt={selectedRecord?.checkedInAt}
+            tag={selectedRecord?.tag}
+            isFavorite={favorites.has(selectedStation.id)}
+            onCheckIn={handleCheckIn}
+            onSetTag={setTag}
+            onSetHasPhoto={setHasPhoto}
+            onToggleFavorite={handleToggleFavorite}
+            onBack={() => setSelectedId(null)}
+          />
+        </DetailOverlay>
+      )}
+
+      <TabBar active={tab} onChange={setTab} />
+      {tab === 'nearby' ? (
+        <NearbyScreen
           position={position}
           isManualPosition={isManualPosition}
-          isCheckedIn={checkedInIds.has(selectedStation.id)}
-          checkedInAt={selectedRecord?.checkedInAt}
-          tag={selectedRecord?.tag}
-          isFavorite={favorites.has(selectedStation.id)}
-          onCheckIn={handleCheckIn}
-          onSetTag={setTag}
-          onSetHasPhoto={setHasPhoto}
-          onToggleFavorite={toggleFavorite}
-          onBack={() => setSelectedId(null)}
+          status={status}
+          error={error}
+          onStart={() => {
+            setManualPosition(null);
+            start();
+          }}
+          onManualPick={(lat, lng) => setManualPosition({ lat, lng })}
+          onClearManual={() => {
+            setManualPosition(null);
+            start();
+          }}
+          checkedInIds={checkedInIds}
+          favorites={favorites}
+          onToggleFavorite={handleToggleFavorite}
+          onSelect={setSelectedId}
         />
       ) : (
-        <>
-          <TabBar active={tab} onChange={setTab} />
+        <div className="pb-16 lg:pb-0 lg:pl-56">
           <InstallBanner />
-          {tab === 'nearby' ? (
-            <NearbyScreen
-              position={position}
-              isManualPosition={isManualPosition}
-              status={status}
-              error={error}
-              onStart={() => {
-                setManualPosition(null);
-                start();
-              }}
-              onManualPick={(lat, lng) => setManualPosition({ lat, lng })}
-              onClearManual={() => {
-                setManualPosition(null);
-                start();
-              }}
-              checkedInIds={checkedInIds}
-              favorites={favorites}
-              onToggleFavorite={toggleFavorite}
-              onSelect={setSelectedId}
-            />
-          ) : (
-            <MyPage
-              stations={allStations}
-              totalCount={totalCount}
-              checkedCount={checkedInIds.size}
-              streak={streak}
-              bestDayCount={bestDayCount}
-              prefectureProgress={prefectureProgress}
-              checkedStations={checkedStations}
-              favorites={favorites}
-              checkedInIds={checkedInIds}
-              position={isManualPosition ? null : position}
-              onExport={exportJson}
-              onImport={handleImport}
-              onSelect={setSelectedId}
-            />
-          )}
+          <MyPage
+            stations={allStations}
+            totalCount={totalCount}
+            checkedCount={checkedInIds.size}
+            streak={streak}
+            bestDayCount={bestDayCount}
+            prefectureProgress={prefectureProgress}
+            checkedStations={checkedStations}
+            favorites={favorites}
+            checkedInIds={checkedInIds}
+            position={isManualPosition ? null : position}
+            onExport={exportJson}
+            onImport={handleImport}
+            onSelect={setSelectedId}
+          />
           <Footer />
-        </>
+        </div>
       )}
     </div>
   );

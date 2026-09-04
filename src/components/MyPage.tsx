@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { StampMapCanvas } from './StampMap/StampMapCanvas';
 import type { CheckinRecord, Station } from '../lib/types';
+import { EmptyState } from './EmptyState';
 import { FavoritesList } from './FavoritesList';
 import { HistoryTimeline } from './HistoryTimeline';
 import { ImportExportPanel } from './ImportExportPanel';
@@ -52,7 +53,7 @@ export function MyPage({
   const allPrefsComplete = prefectureProgress.length > 0 && prefectureProgress.every((p) => p.done > 0);
 
   return (
-    <div className="mx-auto max-w-xl px-4 py-6">
+    <div className="mx-auto max-w-xl px-4 py-6 lg:max-w-5xl">
       <div className="mb-1 text-xs font-bold tracking-wide text-accent">MY PAGE</div>
       <h1 className="mb-5 text-2xl font-black">マイページ</h1>
 
@@ -110,9 +111,13 @@ export function MyPage({
       <div className="mb-6">
         <div className="mb-2 flex items-center justify-between">
           <div className="text-sm font-bold">
-            {prefView === 'map' ? 'スタンプマップ' : '都道府県別制覇率'}（{prefsDone} / 47）
+            都道府県別制覇率（{prefsDone} / 47）
           </div>
-          <div role="group" aria-label="都道府県別の表示形式" className="flex overflow-hidden rounded-lg border border-border text-xs font-bold">
+          <div
+            role="group"
+            aria-label="都道府県別の表示形式"
+            className="flex overflow-hidden rounded-lg border border-border text-xs font-bold lg:hidden"
+          >
             {(
               [
                 ['map', 'マップ'],
@@ -133,33 +138,39 @@ export function MyPage({
           </div>
         </div>
 
-        {prefView === 'map' && (
-          <StampMapCanvas
-            stations={stations}
-            checkedInIds={checkedInIds}
-            favorites={favorites}
-            checkedStations={checkedStations}
-            prefectureProgress={prefectureProgress}
-            position={position}
-            onSelect={onSelect}
-          />
-        )}
-        {prefView === 'stamps' && <StampBook rows={prefectureProgress} />}
-        {prefView === 'list' && (
-          <div className="max-h-64 overflow-y-auto rounded-lg border border-border">
-            {prefectureProgress.map((p) => (
-              <div
-                key={p.prefecture}
-                className="flex items-center justify-between border-b border-border bg-surface px-4 py-2 text-sm last:border-b-0"
-              >
-                <span className={p.done > 0 ? 'font-bold' : 'text-ink-muted'}>{p.prefecture}</span>
-                <span className="font-mono text-xs text-ink-faint">
-                  {p.done} / {p.total}
-                </span>
-              </div>
-            ))}
+        <div className="lg:grid lg:grid-cols-[1.4fr_1fr_0.8fr] lg:gap-4">
+          <div className={prefView === 'map' ? '' : 'hidden lg:block'}>
+            <StampMapCanvas
+              stations={stations}
+              checkedInIds={checkedInIds}
+              favorites={favorites}
+              checkedStations={checkedStations}
+              prefectureProgress={prefectureProgress}
+              position={position}
+              onSelect={onSelect}
+            />
           </div>
-        )}
+          <div className={prefView === 'stamps' ? '' : 'hidden lg:block'}>
+            <div className="mb-2 hidden text-xs font-bold text-ink-muted lg:block">スタンプ帳</div>
+            <StampBook rows={prefectureProgress} />
+          </div>
+          <div className={prefView === 'list' ? '' : 'hidden lg:block'}>
+            <div className="mb-2 hidden text-xs font-bold text-ink-muted lg:block">一覧</div>
+            <div className="max-h-64 overflow-y-auto rounded-lg border border-border lg:max-h-none">
+              {prefectureProgress.map((p) => (
+                <div
+                  key={p.prefecture}
+                  className="flex items-center justify-between border-b border-border bg-surface px-4 py-2 text-sm last:border-b-0"
+                >
+                  <span className={p.done > 0 ? 'font-bold' : 'text-ink-muted'}>{p.prefecture}</span>
+                  <span className="font-mono text-xs text-ink-faint">
+                    {p.done} / {p.total}
+                  </span>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
       </div>
 
       <div className="mb-6">
@@ -170,7 +181,11 @@ export function MyPage({
       <div className="mb-6">
         <div className="mb-2 text-sm font-bold">チェックイン履歴（{checkedStations.length}件）</div>
         {checkedStations.length === 0 ? (
-          <p className="text-sm text-ink-muted">まだチェックインした道の駅がありません。</p>
+          <EmptyState
+            emoji="🚗"
+            title="まだチェックインした道の駅がありません"
+            hint="「近くの道の駅」から探して訪問記録をつけましょう"
+          />
         ) : (
           <HistoryTimeline entries={checkedStations} onSelect={onSelect} />
         )}

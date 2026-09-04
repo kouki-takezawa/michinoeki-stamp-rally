@@ -1,12 +1,14 @@
-import { lazy, Suspense, useMemo, useState } from 'react';
+import { lazy, Suspense, useEffect, useMemo, useRef, useState } from 'react';
 import stations from '../data/michinoeki.json';
+import { useMediaQuery } from '../hooks/useMediaQuery';
 import { distanceMeters } from '../lib/distance';
 import type { GeoErrorInfo, GeoPosition, GeoStatus } from '../hooks/useGeolocation';
 import type { Station } from '../lib/types';
-import { JapanOverviewMap } from './JapanOverviewMap';
+import { BottomSheet } from './BottomSheet';
+import { Footer } from './Footer';
 import { PrefecturePicker } from './PrefecturePicker';
-import { PullToRefresh } from './PullToRefresh';
 import { SearchFilterBar } from './SearchFilterBar';
+import { StationListSkeleton } from './Skeleton';
 import { StationListItem } from './StationListItem';
 
 const MapView = lazy(() => import('./MapView').then((m) => ({ default: m.MapView })));
@@ -14,6 +16,12 @@ const MapView = lazy(() => import('./MapView').then((m) => ({ default: m.MapView
 const allStations = stations as Station[];
 const DEFAULT_LIMIT = 10;
 const FILTERED_LIMIT = 50;
+
+const GEO_ERROR_MESSAGE: Record<number, string> = {
+  1: '位置情報の利用が許可されていません。ブラウザの設定から許可してください。',
+  2: '現在地を取得できませんでした。電波の良い場所で再度お試しください。',
+  3: '現在地の取得がタイムアウトしました。もう一度お試しください。',
+};
 
 interface Props {
   position: GeoPosition | null;
@@ -33,6 +41,8 @@ const PREFECTURES = Array.from(new Set(allStations.map((s) => s.prefecture))).so
   a.localeCompare(b, 'ja'),
 );
 
+const MAP_FALLBACK = <div className="h-full w-full animate-pulse bg-surface-2" />;
+
 export function NearbyScreen({
   position,
   isManualPosition,
@@ -49,55 +59,150 @@ export function NearbyScreen({
   const [query, setQuery] = useState('');
   const [prefecture, setPrefecture] = useState('');
   const [unvisitedOnly, setUnvisitedOnly] = useState(false);
-  const [view, setView] = useState<'list' | 'map'>('map');
   const [showPrefecturePicker, setShowPrefecturePicker] = useState(false);
+  const [hoveredId, setHoveredId] = useState<string | null>(null);
+  const [focusedIndex, setFocusedIndex] = useState(-1);
+  const listRef = useRef<HTMLDivElement | null>(null);
+  const isDesktop = useMediaQuery('(min-width: 1024px)');
 
-  const filtered = useMemo(() => {
-    if (!position) return [];
+  const filteredStations = useMemo(() => {
     const q = query.trim();
     return allStations
       .filter((s) => (q ? s.name.includes(q) : true))
       .filter((s) => (prefecture ? s.prefecture === prefecture : true))
-      .filter((s) => (unvisitedOnly ? !checkedInIds.has(s.id) : true))
+      .filter((s) => (unvisitedOnly ? !checkedInIds.has(s.id) : true));
+  }, [query, prefecture, unvisitedOnly, checkedInIds]);
+
+  const withDistance = useMemo(() => {
+    if (!position) return [];
+    return filteredStations
       .map((s) => ({ ...s, distanceM: distanceMeters(position.lat, position.lng, s.lat, s.lng) }))
       .sort((a, b) => a.distanceM - b.distanceM);
-  }, [position, query, prefecture, unvisitedOnly, checkedInIds]);
+  }, [filteredStations, position]);
 
   const isFiltering = query.trim() !== '' || prefecture !== '' || unvisitedOnly;
-  const visible = filtered.slice(0, isFiltering ? FILTERED_LIMIT : DEFAULT_LIMIT);
-  const visibleOnMap = view === 'map' ? filtered.slice(0, isFiltering ? FILTERED_LIMIT : 150) : visible;
+  const visibleList = withDistance.slice(0, isFiltering ? FILTERED_LIMIT : DEFAULT_LIMIT);
 
-  return (
-    <div className="mx-auto max-w-xl px-4 py-6">
-      <div className="mb-1 text-xs font-bold tracking-wide text-accent">NEARBY</div>
-      <h1 className="mb-2 text-2xl font-black">近くの道の駅</h1>
-      <p className="mb-5 text-sm text-ink-muted">
-        全国{allStations.length}件の道の駅から、現在地に近い順に探せます。
-      </p>
+  useEffect(() => {
+    setFocusedIndex(-1);
+  }, [query, prefecture, unvisitedOnly]);
 
-      <JapanOverviewMap
-        stations={allStations}
-        checkedInIds={checkedInIds}
-        favorites={favorites}
-        position={position}
-        isManualPosition={isManualPosition}
-        status={status}
-        error={error}
-        onRequestLocation={onStart}
-        onSelect={onSelect}
-      />
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => {
+      const target = e.target as HTMLElement | null;
+      if (target && ['INPUT', 'SELECT', 'TEXTAREA'].includes(target.tagName)) return;
+      if (visibleList.length === 0) return;
+      if (e.key === 'ArrowDown') {
+        e.preventDefault();
+        setHoveredId(null);
+        setFocusedIndex((i) => Math.min(visibleList.length - 1, i + 1));
+      } else if (e.key === 'ArrowUp') {
+        e.preventDefault();
+        setHoveredId(null);
+        setFocusedIndex((i) => Math.max(0, i - 1));
+      } else if (e.key === 'Enter' && focusedIndex >= 0) {
+        const s = visibleList[focusedIndex];
+        if (s) onSelect(s.id);
+      }
+    };
+    window.addEventListener('keydown', handler);
+    return () => window.removeEventListener('keydown', handler);
+  }, [visibleList, focusedIndex, onSelect]);
 
-      {!position && status !== 'loading' && (
-        <div className="mt-2 text-center">
-          <button
-            type="button"
-            onClick={() => setShowPrefecturePicker((v) => !v)}
-            className="text-xs text-ink-muted underline"
-          >
-            位置情報が使えない場合は都道府県から探す
-          </button>
+  useEffect(() => {
+    if (focusedIndex < 0) return;
+    listRef.current?.querySelector(`[data-row-index="${focusedIndex}"]`)?.scrollIntoView({ block: 'nearest' });
+  }, [focusedIndex]);
+
+  const highlightedId = hoveredId ?? (focusedIndex >= 0 ? (visibleList[focusedIndex]?.id ?? null) : null);
+
+  const renderList = (limit: number, emptyMessage: string) => (
+    <div ref={listRef}>
+      {visibleList.length === 0 ? (
+        <p className="py-8 text-center text-sm text-ink-muted">{emptyMessage}</p>
+      ) : (
+        <div className="overflow-hidden rounded-lg border border-border">
+          {visibleList.map((s, i) => (
+            <div key={s.id} data-row-index={i}>
+              <StationListItem
+                station={s}
+                isCheckedIn={checkedInIds.has(s.id)}
+                isFavorite={favorites.has(s.id)}
+                isHighlighted={highlightedId === s.id}
+                query={query}
+                onSelect={onSelect}
+                onToggleFavorite={onToggleFavorite}
+                onHover={setHoveredId}
+              />
+            </div>
+          ))}
+        </div>
+      )}
+      {isFiltering && withDistance.length > limit && (
+        <p className="mt-2 text-center text-xs text-ink-faint">
+          他{withDistance.length - limit}件あります。絞り込みを追加してください
+        </p>
+      )}
+    </div>
+  );
+
+  const searchBar = (
+    <SearchFilterBar
+      query={query}
+      onQueryChange={setQuery}
+      prefecture={prefecture}
+      onPrefectureChange={setPrefecture}
+      prefectures={PREFECTURES}
+      unvisitedOnly={unvisitedOnly}
+      onUnvisitedOnlyChange={setUnvisitedOnly}
+    />
+  );
+
+  const locationStatusLine = position ? (
+    isManualPosition ? (
+      <button type="button" onClick={onClearManual} className="text-xs text-ink-muted underline">
+        推定位置で表示中（都道府県中心）・GPSに切り替える
+      </button>
+    ) : (
+      <button type="button" onClick={onStart} className="text-xs text-ink-muted underline">
+        現在地を更新（精度 ±{Math.round(position.accuracy)}m）
+      </button>
+    )
+  ) : null;
+
+  const locationCta = !position && (
+    <div className="rounded-lg border border-border bg-surface p-4 text-sm shadow-sm">
+      {status === 'loading' ? (
+        <>
+          <p className="mb-2 text-ink-muted">現在地を取得中…</p>
+          <StationListSkeleton rows={3} />
+        </>
+      ) : (
+        <>
+          <p className="mb-2 font-bold">現在地を使って近くの道の駅を探します</p>
+          {status === 'error' && error && (
+            <p className="mb-2 text-xs text-red-600">
+              {GEO_ERROR_MESSAGE[error.code] ?? '現在地の取得に失敗しました。'}
+            </p>
+          )}
+          {status === 'unsupported' ? (
+            <p className="text-xs text-ink-faint">このブラウザは位置情報の取得に対応していません。</p>
+          ) : (
+            <button type="button" onClick={onStart} className="rounded-lg bg-accent px-4 py-2 font-bold text-white">
+              現在地を取得する
+            </button>
+          )}
+          <div className="mt-2">
+            <button
+              type="button"
+              onClick={() => setShowPrefecturePicker((v) => !v)}
+              className="text-xs text-ink-muted underline"
+            >
+              都道府県から探す
+            </button>
+          </div>
           {showPrefecturePicker && (
-            <div className="mt-3 text-left">
+            <div className="mt-3">
               <PrefecturePicker
                 onPick={(lat, lng, pref) => {
                   onManualPick(lat, lng, pref);
@@ -107,90 +212,73 @@ export function NearbyScreen({
               />
             </div>
           )}
+        </>
+      )}
+    </div>
+  );
+
+  if (isDesktop) {
+    return (
+      <div className="flex h-[calc(100vh-1px)] pl-56">
+        <div className="w-[420px] shrink-0 overflow-y-auto border-r border-border p-6">
+          <div className="mb-1 text-xs font-bold tracking-wide text-accent">NEARBY</div>
+          <h1 className="mb-2 text-2xl font-black">近くの道の駅</h1>
+          <p className="mb-4 text-sm text-ink-muted">
+            全国{allStations.length}件の道の駅から、現在地に近い順に探せます。矢印キーで移動、Enterで詳細を開けます。
+          </p>
+          {locationCta}
+          {position && (
+            <>
+              <div className="mt-4 mb-3">{locationStatusLine}</div>
+              <div className="mb-3">{searchBar}</div>
+              {renderList(DEFAULT_LIMIT, '条件に一致する道の駅が見つかりませんでした。')}
+            </>
+          )}
+          <Footer />
+        </div>
+        <div className="relative flex-1">
+          <Suspense fallback={MAP_FALLBACK}>
+            <MapView
+              stations={filteredStations}
+              checkedInIds={checkedInIds}
+              favorites={favorites}
+              userLat={isManualPosition ? undefined : position?.lat}
+              userLng={isManualPosition ? undefined : position?.lng}
+              highlightedId={highlightedId}
+              onSelect={onSelect}
+            />
+          </Suspense>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="fixed inset-x-0 top-0 bottom-16">
+      <Suspense fallback={MAP_FALLBACK}>
+        <MapView
+          stations={filteredStations}
+          checkedInIds={checkedInIds}
+          favorites={favorites}
+          userLat={isManualPosition ? undefined : position?.lat}
+          userLng={isManualPosition ? undefined : position?.lng}
+          highlightedId={highlightedId}
+          onSelect={onSelect}
+        />
+      </Suspense>
+
+      {!position && (
+        <div className="pointer-events-none absolute inset-x-0 top-3 z-10 flex justify-center px-3">
+          <div className="pointer-events-auto w-full max-w-sm">{locationCta}</div>
         </div>
       )}
 
       {position && (
-        <>
-          <div className="mt-6 mb-3 flex items-center justify-between">
-            {isManualPosition ? (
-              <button type="button" onClick={onClearManual} className="text-xs text-ink-muted underline">
-                推定位置で表示中（都道府県中心）・GPSに切り替える
-              </button>
-            ) : (
-              <button type="button" onClick={onStart} className="text-xs text-ink-muted underline">
-                現在地を更新（精度 ±{Math.round(position.accuracy)}m）
-              </button>
-            )}
-            <div role="group" aria-label="表示形式" className="flex overflow-hidden rounded-lg border border-border text-xs font-bold">
-              <button
-                type="button"
-                onClick={() => setView('list')}
-                aria-pressed={view === 'list'}
-                className={`px-3 py-1.5 ${view === 'list' ? 'bg-accent text-white' : 'bg-surface text-ink-muted'}`}
-              >
-                リスト
-              </button>
-              <button
-                type="button"
-                onClick={() => setView('map')}
-                aria-pressed={view === 'map'}
-                className={`px-3 py-1.5 ${view === 'map' ? 'bg-accent text-white' : 'bg-surface text-ink-muted'}`}
-              >
-                実写地図
-              </button>
-            </div>
-          </div>
-
-          <SearchFilterBar
-            query={query}
-            onQueryChange={setQuery}
-            prefecture={prefecture}
-            onPrefectureChange={setPrefecture}
-            prefectures={PREFECTURES}
-            unvisitedOnly={unvisitedOnly}
-            onUnvisitedOnlyChange={setUnvisitedOnly}
-          />
-
-          {view === 'map' ? (
-            <Suspense fallback={<div className="h-[70vh] w-full rounded-lg border border-border bg-surface-2" />}>
-              <MapView
-                stations={visibleOnMap}
-                checkedInIds={checkedInIds}
-                favorites={favorites}
-                userLat={isManualPosition ? undefined : position.lat}
-                userLng={isManualPosition ? undefined : position.lng}
-                onSelect={onSelect}
-              />
-            </Suspense>
-          ) : (
-            <PullToRefresh onRefresh={onStart}>
-              {visible.length === 0 ? (
-                <p className="py-8 text-center text-sm text-ink-muted">
-                  条件に一致する道の駅が見つかりませんでした。
-                </p>
-              ) : (
-                <div className="overflow-hidden rounded-lg border border-border">
-                  {visible.map((s) => (
-                    <StationListItem
-                      key={s.id}
-                      station={s}
-                      isCheckedIn={checkedInIds.has(s.id)}
-                      isFavorite={favorites.has(s.id)}
-                      onSelect={onSelect}
-                      onToggleFavorite={onToggleFavorite}
-                    />
-                  ))}
-                </div>
-              )}
-              {isFiltering && filtered.length > FILTERED_LIMIT && (
-                <p className="mt-2 text-center text-xs text-ink-faint">
-                  他{filtered.length - FILTERED_LIMIT}件あります。絞り込みを追加してください
-                </p>
-              )}
-            </PullToRefresh>
-          )}
-        </>
+        <BottomSheet header={searchBar}>
+          <div className="mb-2">{locationStatusLine}</div>
+          {renderList(DEFAULT_LIMIT, '条件に一致する道の駅が見つかりませんでした。')}
+          <Footer />
+        </BottomSheet>
       )}
     </div>
   );

@@ -40,6 +40,7 @@ export function StampMapCanvas({
   const [stampingId, setStampingId] = useState<string | null>(null);
   const [sparklePrefecture, setSparklePrefecture] = useState<string | null>(null);
   const [timelapseCount, setTimelapseCount] = useState<number | null>(null);
+  const [activeRegion, setActiveRegion] = useState<string | null>(null);
   const { svgRef, viewBox, handlers, zoomTo, reset } = useMapPanZoom(BASE_VIEWBOX);
 
   const orderedCheckins = useMemo(
@@ -191,6 +192,7 @@ export function StampMapCanvas({
     const p = projection.project(picked.lng, picked.lat);
     setRouletteHighlight({ id: picked.id, name: picked.name });
     setFocusedId(picked.id);
+    setActiveRegion(picked.prefecture);
     zoomTo({ x: p.x - 12, y: p.y - 12, w: 24, h: 24 });
   };
 
@@ -198,6 +200,7 @@ export function StampMapCanvas({
     if (!projection) return;
     const p = projection.project(s.lng, s.lat);
     setFocusedId(s.id);
+    setActiveRegion(s.prefecture);
     zoomTo({ x: p.x - 10, y: p.y - 10, w: 20, h: 20 });
   };
 
@@ -224,7 +227,10 @@ export function StampMapCanvas({
       <div className="mb-2 flex flex-wrap items-center gap-1.5">
         <button
           type="button"
-          onClick={reset}
+          onClick={() => {
+            reset();
+            setActiveRegion(null);
+          }}
           className="rounded-lg border border-border bg-surface px-2.5 py-1 text-xs font-bold text-ink-muted"
         >
           全国
@@ -233,12 +239,22 @@ export function StampMapCanvas({
           <button
             key={r.id}
             type="button"
-            onClick={() => zoomTo(r.box)}
-            className="rounded-lg border border-border bg-surface px-2.5 py-1 text-xs font-bold text-ink-muted hover:text-ink"
+            onClick={() => {
+              zoomTo(r.box);
+              setActiveRegion(r.name);
+            }}
+            aria-pressed={activeRegion === r.name}
+            className={`rounded-lg border border-border px-2.5 py-1 text-xs font-bold hover:text-ink ${
+              activeRegion === r.name ? 'bg-accent-soft text-accent' : 'bg-surface text-ink-muted'
+            }`}
           >
             {r.name}
           </button>
         ))}
+      </div>
+
+      <div className="mb-1.5 text-xs text-ink-faint">
+        日本 {activeRegion ? `› ${activeRegion}` : '（全国表示）'}
       </div>
 
       <div

@@ -1,5 +1,6 @@
 import stations from '../data/michinoeki.json';
 import type { Station } from '../lib/types';
+import { EmptyState } from './EmptyState';
 
 const allStations = stations as Station[];
 
@@ -14,9 +15,11 @@ export function FavoritesList({ favorites, checkedInIds, onSelect }: Props) {
 
   if (items.length === 0) {
     return (
-      <p className="text-sm text-ink-muted">
-        まだお気に入りがありません。一覧の☆をタップすると追加できます。
-      </p>
+      <EmptyState
+        emoji="⭐"
+        title="まだお気に入りがありません"
+        hint="一覧の☆をタップすると追加できます"
+      />
     );
   }
 

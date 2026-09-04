@@ -66,5 +66,5 @@ export function StationMap({ lat, lng, userLat, userLng }: Props) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [lat, lng, userLat, userLng]);
 
-  return <div ref={containerRef} className="h-56 w-full rounded-lg border border-border" />;
+  return <div ref={containerRef} className="relative z-0 h-56 w-full rounded-lg border border-border" />;
 }

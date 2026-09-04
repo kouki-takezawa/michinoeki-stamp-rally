@@ -7,33 +7,65 @@ interface Props {
   onChange: (tab: TabKey) => void;
 }
 
-const TABS: { key: TabKey; label: string }[] = [
-  { key: 'nearby', label: '近くの道の駅' },
-  { key: 'mypage', label: 'マイページ' },
+const TABS: { key: TabKey; label: string; icon: string }[] = [
+  { key: 'nearby', label: '近くの道の駅', icon: '📍' },
+  { key: 'mypage', label: 'マイページ', icon: '🗺️' },
 ];
 
 export function TabBar({ active, onChange }: Props) {
   return (
-    <nav className="sticky top-0 z-10 flex justify-center border-b border-border bg-surface">
-      <div className="flex w-full max-w-xl items-center px-2">
+    <>
+      {/* デスクトップ：左サイドバー */}
+      <nav className="fixed inset-y-0 left-0 z-30 hidden w-56 flex-col border-r border-border bg-surface p-4 lg:flex">
+        <div className="mb-6 px-2">
+          <div className="font-display text-lg font-black">道の駅ラリー</div>
+        </div>
+        <div className="flex flex-col gap-1">
+          {TABS.map((t) => (
+            <button
+              key={t.key}
+              type="button"
+              onClick={() => onChange(t.key)}
+              aria-current={active === t.key}
+              className={`flex items-center gap-3 rounded-lg px-3 py-2.5 text-left text-sm font-bold ${
+                active === t.key ? 'bg-accent-soft text-accent' : 'text-ink-muted hover:bg-surface-2 hover:text-ink'
+              }`}
+            >
+              <span aria-hidden="true">{t.icon}</span>
+              {t.label}
+            </button>
+          ))}
+        </div>
+        <div className="mt-auto pt-4">
+          <ThemeToggle />
+        </div>
+      </nav>
+
+      {/* モバイル：下部タブバー */}
+      <nav
+        style={{ paddingBottom: 'env(safe-area-inset-bottom)' }}
+        className="fixed inset-x-0 bottom-0 z-30 flex items-center border-t border-border bg-surface lg:hidden"
+      >
         {TABS.map((t) => (
           <button
             key={t.key}
             type="button"
             onClick={() => onChange(t.key)}
-            className={`flex-1 border-b-2 px-4 py-3 text-sm font-bold ${
-              active === t.key
-                ? 'border-accent text-accent'
-                : 'border-transparent text-ink-muted hover:text-ink'
+            aria-current={active === t.key}
+            className={`flex flex-1 flex-col items-center gap-0.5 py-2.5 text-xs font-bold ${
+              active === t.key ? 'text-accent' : 'text-ink-faint'
             }`}
           >
+            <span className="text-lg" aria-hidden="true">
+              {t.icon}
+            </span>
             {t.label}
           </button>
         ))}
-        <div className="shrink-0 py-2">
-          <ThemeToggle />
+        <div className="pr-3">
+          <ThemeToggle compact />
         </div>
-      </div>
-    </nav>
+      </nav>
+    </>
   );
 }
