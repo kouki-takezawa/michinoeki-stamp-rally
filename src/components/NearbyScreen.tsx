@@ -332,6 +332,7 @@ export function NearbyScreen({
       <Suspense fallback={MAP_FALLBACK}>
         <MapView
           stations={filteredStations}
+          focusTarget={focusTarget}
           checkedInIds={checkedInIds}
           favorites={favorites}
           userLat={isManualPosition ? undefined : position?.lat}
