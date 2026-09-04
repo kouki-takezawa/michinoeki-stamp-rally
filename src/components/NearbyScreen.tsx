@@ -2,6 +2,7 @@ import { lazy, Suspense, useEffect, useMemo, useRef, useState } from 'react';
 import stations from '../data/michinoeki.json';
 import { useMediaQuery } from '../hooks/useMediaQuery';
 import { distanceMeters } from '../lib/distance';
+import { MOBILE_TABBAR_SPACE } from '../lib/layout';
 import { capitalOfPrefecture } from '../lib/prefectureCapitals';
 import { loadRecentSearches, loadRecentStationIds, recordRecentSearch } from '../lib/recentActivity';
 import { activeSeasonalEvent } from '../lib/seasonalEvents';
@@ -328,7 +329,7 @@ export function NearbyScreen({
   }
 
   return (
-    <div className="fixed inset-x-0 top-0 bottom-16">
+    <div className="fixed inset-x-0 top-0" style={{ bottom: MOBILE_TABBAR_SPACE }}>
       <Suspense fallback={MAP_FALLBACK}>
         <MapView
           stations={filteredStations}

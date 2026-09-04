@@ -1,4 +1,5 @@
 import { useRef, useState, type ReactNode } from 'react';
+import { MOBILE_TABBAR_SPACE } from '../lib/layout';
 
 type SnapState = 'peek' | 'half' | 'full';
 
@@ -57,8 +58,8 @@ export function BottomSheet({ children, header, defaultState = 'half' }: Props) 
 
   return (
     <div
-      style={{ height, paddingBottom: 'env(safe-area-inset-bottom)' }}
-      className={`fixed inset-x-0 bottom-0 z-20 flex flex-col rounded-t-2xl border-t border-border bg-surface shadow-[0_-6px_20px_rgba(0,0,0,0.12)] lg:hidden ${
+      style={{ height, bottom: MOBILE_TABBAR_SPACE }}
+      className={`fixed inset-x-0 z-20 flex flex-col rounded-t-2xl border-t border-border bg-surface shadow-[0_-6px_20px_rgba(0,0,0,0.12)] lg:hidden ${
         isDragging ? '' : 'transition-[height] duration-200 ease-out'
       }`}
     >

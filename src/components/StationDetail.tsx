@@ -89,8 +89,10 @@ export function StationDetail({
   }, [station.id, station.name, distanceM, preferences.drivingMode]);
 
   const [imageFailed, setImageFailed] = useState(false);
+  const [imageLoaded, setImageLoaded] = useState(false);
   useEffect(() => {
     setImageFailed(false);
+    setImageLoaded(false);
   }, [station.id]);
 
   return (
@@ -129,13 +131,21 @@ export function StationDetail({
       )}
 
       {station.imageUrl && !imageFailed ? (
-        <img
-          src={station.imageUrl}
-          alt={station.name}
-          loading="lazy"
-          onError={() => setImageFailed(true)}
-          className="h-56 w-full rounded-lg border border-border object-cover"
-        />
+        <div className="relative h-56 w-full">
+          {!imageLoaded && (
+            <div className="absolute inset-0 animate-pulse rounded-lg border border-border bg-surface-2" />
+          )}
+          <img
+            src={station.imageUrl}
+            alt={station.name}
+            loading="lazy"
+            onLoad={() => setImageLoaded(true)}
+            onError={() => setImageFailed(true)}
+            className={`h-56 w-full rounded-lg border border-border object-cover transition-opacity duration-300 ${
+              imageLoaded ? 'opacity-100' : 'opacity-0'
+            }`}
+          />
+        </div>
       ) : (
         <Suspense fallback={<div className="h-56 w-full rounded-lg border border-border bg-surface-2" />}>
           <StationMap

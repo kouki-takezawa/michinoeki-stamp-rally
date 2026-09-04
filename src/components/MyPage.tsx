@@ -186,14 +186,14 @@ export function MyPage({
       </div>
 
       <div className="mb-6">
-        <div className="mb-2 flex items-center justify-between">
+        <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
           <div className="text-sm font-bold">
             都道府県別制覇率（{prefsDone} / 47）
           </div>
           <div
             role="group"
             aria-label="都道府県別の表示形式"
-            className="flex overflow-hidden rounded-lg border border-border text-xs font-bold"
+            className="flex shrink-0 overflow-hidden rounded-lg border border-border text-xs font-bold"
           >
             {(
               [
@@ -208,7 +208,7 @@ export function MyPage({
                 type="button"
                 onClick={() => setPrefView(key)}
                 aria-pressed={prefView === key}
-                className={`px-2 py-1 ${prefView === key ? 'bg-accent text-white' : 'bg-surface text-ink-muted'}`}
+                className={`whitespace-nowrap px-2 py-1 ${prefView === key ? 'bg-accent text-white' : 'bg-surface text-ink-muted'}`}
               >
                 {label}
               </button>

@@ -50,10 +50,10 @@ export function TabBar({ active, onChange, onOpenSettings }: Props) {
         </div>
       </nav>
 
-      {/* モバイル：下部タブバー */}
+      {/* モバイル：下部タブバー（高さ h-16 固定。BottomSheet等はlib/layout.tsのMOBILE_TABBAR_SPACEでこの高さぶん持ち上げる） */}
       <nav
         style={{ paddingBottom: 'env(safe-area-inset-bottom)' }}
-        className="fixed inset-x-0 bottom-0 z-30 flex items-center border-t border-border bg-surface lg:hidden"
+        className="fixed inset-x-0 bottom-0 z-30 flex h-16 items-center border-t border-border bg-surface lg:hidden"
       >
         {TABS.map((t) => (
           <button
@@ -61,7 +61,7 @@ export function TabBar({ active, onChange, onOpenSettings }: Props) {
             type="button"
             onClick={() => onChange(t.key)}
             aria-current={active === t.key}
-            className={`flex flex-1 flex-col items-center gap-0.5 py-2.5 text-xs font-bold ${
+            className={`flex flex-1 flex-col items-center gap-0.5 py-2 text-xs font-bold ${
               active === t.key ? 'text-accent' : 'text-ink-faint'
             }`}
           >
@@ -74,7 +74,7 @@ export function TabBar({ active, onChange, onOpenSettings }: Props) {
         <button
           type="button"
           onClick={onOpenSettings}
-          className="flex flex-1 flex-col items-center gap-0.5 py-2.5 text-xs font-bold text-ink-faint"
+          className="flex flex-1 flex-col items-center gap-0.5 py-2 text-xs font-bold text-ink-faint"
         >
           <span className="text-lg" aria-hidden="true">
             ⚙️
