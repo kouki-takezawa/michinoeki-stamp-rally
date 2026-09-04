@@ -2,7 +2,9 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import stations from './data/michinoeki.json';
 import { DetailOverlay } from './components/DetailOverlay';
 import { Footer } from './components/Footer';
+import { FriendsScreen } from './components/FriendsScreen';
 import { InstallBanner } from './components/InstallBanner';
+import { LoginScreen } from './components/LoginScreen';
 import { MilestoneModal } from './components/MilestoneModal';
 import { MyPage } from './components/MyPage';
 import { NearbyScreen } from './components/NearbyScreen';
@@ -14,7 +16,9 @@ import { useCheckins } from './hooks/useCheckins';
 import { useFavorites } from './hooks/useFavorites';
 import { useGeolocation } from './hooks/useGeolocation';
 import { useJourney } from './hooks/useJourney';
+import { useAuth } from './lib/AuthContext';
 import { celebrateBigMilestone, celebrateCheckin, vibrateFavorite } from './lib/celebrate';
+import { reconcileCheckinsToCloud, reconcileFavoritesToCloud } from './lib/cloudSync';
 import { distanceMeters, formatDistance } from './lib/distance';
 import type { Milestone } from './lib/milestones';
 import { hasSeenCoachMark, markCoachMarkSeen } from './lib/coachMarks';
@@ -34,9 +38,9 @@ const PROXIMITY_THRESHOLD_M = 1000;
 function loadTab(): TabKey {
   try {
     const fromUrl = new URLSearchParams(window.location.search).get('tab');
-    if (fromUrl === 'nearby' || fromUrl === 'mypage') return fromUrl;
+    if (fromUrl === 'nearby' || fromUrl === 'mypage' || fromUrl === 'friends') return fromUrl;
     const raw = localStorage.getItem(TAB_STORAGE_KEY);
-    if (raw === 'nearby' || raw === 'mypage') return raw;
+    if (raw === 'nearby' || raw === 'mypage' || raw === 'friends') return raw;
   } catch {
     // ignore
   }
@@ -83,8 +87,10 @@ function App() {
   const [milestoneQueue, setMilestoneQueue] = useState<Milestone[]>([]);
 
   const { show } = useToast();
+  const { user, loading: authLoading } = useAuth();
   const { position: gpsPosition, status, error, start } = useGeolocation();
   const {
+    records,
     checkedInIds,
     checkIn,
     setTag,
@@ -190,6 +196,17 @@ function App() {
     }
   }, [gpsPosition, isManualPosition, checkedInIds, preferences.proximityAlerts]);
 
+  // ログイン中は、チェックイン・お気に入りの変更をその都度Supabaseへ反映する（友達がスタンプ帳を見られるように）
+  useEffect(() => {
+    if (!user) return;
+    void reconcileCheckinsToCloud(user.id, records);
+  }, [user, records]);
+
+  useEffect(() => {
+    if (!user) return;
+    void reconcileFavoritesToCloud(user.id, favorites);
+  }, [user, favorites]);
+
   // D20: ホーム画面アイコンに連続記録日数をバッジ表示（対応ブラウザのみ。ホームウィジェットの簡易代替）
   useEffect(() => {
     const nav = navigator as Navigator & {
@@ -202,6 +219,16 @@ function App() {
       nav.clearAppBadge?.().catch(() => {});
     }
   }, [streak]);
+
+  if (authLoading) {
+    return (
+      <div className="flex min-h-screen items-center justify-center text-sm text-ink-muted">読み込み中…</div>
+    );
+  }
+
+  if (!user) {
+    return <LoginScreen />;
+  }
 
   return (
     <div className="min-h-screen bg-bg text-ink">
@@ -275,7 +302,7 @@ function App() {
           onToggleFavorite={handleToggleFavorite}
           onSelect={selectStation}
         />
-      ) : (
+      ) : tab === 'mypage' ? (
         <div className="pb-16 lg:pb-0 lg:pl-56">
           <InstallBanner />
           <MyPage
@@ -297,6 +324,11 @@ function App() {
             onImport={handleImport}
             onSelect={selectStation}
           />
+          <Footer />
+        </div>
+      ) : (
+        <div className="pb-16 lg:pb-0 lg:pl-56">
+          <FriendsScreen />
           <Footer />
         </div>
       )}

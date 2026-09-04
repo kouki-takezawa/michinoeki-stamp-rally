@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { useAuth } from '../lib/AuthContext';
 import { requestNotificationPermission } from '../lib/notifications';
 import { usePreferences, type Skin } from '../lib/PreferencesContext';
 import { addProfile, loadActiveProfileId, loadProfiles, setActiveProfileId } from '../lib/profiles';
@@ -14,6 +15,7 @@ const SKIN_LABEL: Record<Skin, string> = { default: '標準', roadsign: '道路�
 export function SettingsPanel({ onClose }: Props) {
   const { preferences, update } = usePreferences();
   const { theme, setTheme } = useTheme();
+  const { user, signOut } = useAuth();
   const [profiles, setProfiles] = useState(() => loadProfiles());
   const activeProfileId = loadActiveProfileId();
   const [newProfileName, setNewProfileName] = useState('');
@@ -41,6 +43,18 @@ export function SettingsPanel({ onClose }: Props) {
         </div>
 
         <div className="space-y-6 text-sm">
+          <section>
+            <div className="mb-2 font-bold">アカウント</div>
+            <p className="mb-2 truncate text-xs text-ink-muted">{user?.email}</p>
+            <button
+              type="button"
+              onClick={() => void signOut()}
+              className="rounded-lg border border-border px-3 py-1.5 text-xs font-bold text-ink-muted"
+            >
+              ログアウト
+            </button>
+          </section>
+
           <section>
             <div className="mb-2 font-bold">テーマ</div>
             <div className="flex gap-2">

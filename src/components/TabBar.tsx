@@ -1,6 +1,6 @@
 import { ThemeToggle } from './ThemeToggle';
 
-export type TabKey = 'nearby' | 'mypage';
+export type TabKey = 'nearby' | 'mypage' | 'friends';
 
 interface Props {
   active: TabKey;
@@ -11,6 +11,7 @@ interface Props {
 const TABS: { key: TabKey; label: string; icon: string }[] = [
   { key: 'nearby', label: '近くの道の駅', icon: '📍' },
   { key: 'mypage', label: 'マイページ', icon: '🗺️' },
+  { key: 'friends', label: '友達', icon: '👥' },
 ];
 
 export function TabBar({ active, onChange, onOpenSettings }: Props) {
