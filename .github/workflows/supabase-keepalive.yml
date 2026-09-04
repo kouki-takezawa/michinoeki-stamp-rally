@@ -12,7 +12,12 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Ping Supabase project
-        if: ${{ secrets.SUPABASE_URL != '' && secrets.SUPABASE_ANON_KEY != '' }}
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
         run: |
-          curl -sf "${{ secrets.SUPABASE_URL }}/auth/v1/health" \
-            -H "apikey: ${{ secrets.SUPABASE_ANON_KEY }}"
+          if [ -z "$SUPABASE_URL" ] || [ -z "$SUPABASE_ANON_KEY" ]; then
+            echo "SUPABASE_URL / SUPABASE_ANON_KEY secrets are not set yet; skipping."
+            exit 0
+          fi
+          curl -sf "$SUPABASE_URL/auth/v1/health" -H "apikey: $SUPABASE_ANON_KEY"
