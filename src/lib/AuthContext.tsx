@@ -2,10 +2,19 @@ import type { Session, User } from '@supabase/supabase-js';
 import { createContext, useContext, useEffect, useState, type ReactNode } from 'react';
 import { supabase } from './supabaseClient';
 
+export interface SignUpResult {
+  error: string | null;
+  needsEmailConfirmation: boolean;
+}
+
 interface AuthContextValue {
   user: User | null;
   loading: boolean;
-  signInWithEmail: (email: string) => Promise<{ error: string | null }>;
+  isPasswordRecovery: boolean;
+  signUp: (email: string, password: string) => Promise<SignUpResult>;
+  signIn: (email: string, password: string) => Promise<{ error: string | null }>;
+  sendPasswordReset: (email: string) => Promise<{ error: string | null }>;
+  updatePassword: (password: string) => Promise<{ error: string | null }>;
   signOut: () => Promise<void>;
 }
 
@@ -14,23 +23,43 @@ const AuthContext = createContext<AuthContextValue | null>(null);
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [session, setSession] = useState<Session | null>(null);
   const [loading, setLoading] = useState(true);
+  const [isPasswordRecovery, setIsPasswordRecovery] = useState(false);
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data }) => {
       setSession(data.session);
       setLoading(false);
     });
-    const { data: sub } = supabase.auth.onAuthStateChange((_event, next) => {
+    const { data: sub } = supabase.auth.onAuthStateChange((event, next) => {
       setSession(next);
+      if (event === 'PASSWORD_RECOVERY') setIsPasswordRecovery(true);
     });
     return () => sub.subscription.unsubscribe();
   }, []);
 
-  const signInWithEmail = async (email: string): Promise<{ error: string | null }> => {
-    const { error } = await supabase.auth.signInWithOtp({
-      email,
-      options: { emailRedirectTo: window.location.origin },
+  // サインアップ後に「Confirm email」設定がON/OFFのどちらでも正しく動くよう、
+  // sessionが即座に発行されたか(=確認不要)を見て呼び出し側の表示を切り替える
+  const signUp = async (email: string, password: string): Promise<SignUpResult> => {
+    const { data, error } = await supabase.auth.signUp({ email, password });
+    if (error) return { error: error.message, needsEmailConfirmation: false };
+    return { error: null, needsEmailConfirmation: !data.session };
+  };
+
+  const signIn = async (email: string, password: string): Promise<{ error: string | null }> => {
+    const { error } = await supabase.auth.signInWithPassword({ email, password });
+    return { error: error?.message ?? null };
+  };
+
+  const sendPasswordReset = async (email: string): Promise<{ error: string | null }> => {
+    const { error } = await supabase.auth.resetPasswordForEmail(email, {
+      redirectTo: window.location.origin,
     });
+    return { error: error?.message ?? null };
+  };
+
+  const updatePassword = async (password: string): Promise<{ error: string | null }> => {
+    const { error } = await supabase.auth.updateUser({ password });
+    if (!error) setIsPasswordRecovery(false);
     return { error: error?.message ?? null };
   };
 
@@ -39,7 +68,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   return (
-    <AuthContext.Provider value={{ user: session?.user ?? null, loading, signInWithEmail, signOut }}>
+    <AuthContext.Provider
+      value={{
+        user: session?.user ?? null,
+        loading,
+        isPasswordRecovery,
+        signUp,
+        signIn,
+        sendPasswordReset,
+        updatePassword,
+        signOut,
+      }}
+    >
       {children}
     </AuthContext.Provider>
   );

@@ -7,6 +7,7 @@ import { LoginScreen } from './components/LoginScreen';
 import { MilestoneModal } from './components/MilestoneModal';
 import { NearbyScreen } from './components/NearbyScreen';
 import { OnboardingModal } from './components/OnboardingModal';
+import { SetNewPasswordScreen } from './components/SetNewPasswordScreen';
 import { shouldShowSplash, SplashScreen } from './components/SplashScreen';
 import { TabBar, type TabKey } from './components/TabBar';
 import { useCheckins } from './hooks/useCheckins';
@@ -98,7 +99,7 @@ function App() {
   const [milestoneQueue, setMilestoneQueue] = useState<Milestone[]>([]);
 
   const { show } = useToast();
-  const { user, loading: authLoading } = useAuth();
+  const { user, loading: authLoading, isPasswordRecovery } = useAuth();
   const { position: gpsPosition, status, error, start } = useGeolocation();
   const {
     records,
@@ -238,6 +239,15 @@ function App() {
       <>
         {splashOverlay}
         <div className="flex min-h-screen items-center justify-center text-sm text-ink-muted">読み込み中…</div>
+      </>
+    );
+  }
+
+  if (isPasswordRecovery) {
+    return (
+      <>
+        {splashOverlay}
+        <SetNewPasswordScreen />
       </>
     );
   }
