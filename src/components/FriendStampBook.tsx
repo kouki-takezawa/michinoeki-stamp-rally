@@ -1,9 +1,9 @@
 import { useEffect, useState } from 'react';
 import stations from '../data/michinoeki.json';
 import type { FriendProfile } from '../lib/friends';
-import { loadFriendCheckins, loadFriendFavorites } from '../lib/friends';
+import { loadFriendFavorites, loadFriendVisitedStationIds } from '../lib/friends';
 import { computePrefectureProgress } from '../lib/progress';
-import type { CheckinRecord, Station } from '../lib/types';
+import type { Station } from '../lib/types';
 import { StampBook } from './StampBook';
 
 const allStations = stations as Station[];
@@ -13,26 +13,39 @@ interface Props {
   onClose: () => void;
 }
 
+type LoadState =
+  | { status: 'loading' }
+  | { status: 'error' }
+  | { status: 'ok'; visitedStationIds: string[]; favoriteCount: number };
+
 export function FriendStampBook({ friend, onClose }: Props) {
-  const [checkins, setCheckins] = useState<CheckinRecord[] | null>(null);
-  const [favoriteCount, setFavoriteCount] = useState(0);
+  const [state, setState] = useState<LoadState>({ status: 'loading' });
 
   useEffect(() => {
     let cancelled = false;
-    Promise.all([loadFriendCheckins(friend.id), loadFriendFavorites(friend.id)]).then(([c, f]) => {
-      if (cancelled) return;
-      setCheckins(c);
-      setFavoriteCount(f.size);
-    });
+    setState({ status: 'loading' });
+    Promise.all([loadFriendVisitedStationIds(friend.id), loadFriendFavorites(friend.id)]).then(
+      ([visited, favorites]) => {
+        if (cancelled) return;
+        if (visited.error || favorites.error) {
+          setState({ status: 'error' });
+          return;
+        }
+        setState({ status: 'ok', visitedStationIds: visited.data, favoriteCount: favorites.data.size });
+      },
+    );
     return () => {
       cancelled = true;
     };
   }, [friend.id]);
 
-  const prefectureProgress = checkins ? computePrefectureProgress(checkins, allStations) : [];
-  const recent = checkins
-    ? [...checkins].sort((a, b) => b.checkedInAt.localeCompare(a.checkedInAt)).slice(0, 10)
-    : [];
+  const prefectureProgress =
+    state.status === 'ok'
+      ? computePrefectureProgress(
+          state.visitedStationIds.map((stationId) => ({ stationId })),
+          allStations,
+        )
+      : [];
 
   return (
     <div
@@ -48,46 +61,35 @@ export function FriendStampBook({ friend, onClose }: Props) {
           </button>
         </div>
 
-        {checkins === null ? (
+        {state.status === 'loading' ? (
           <p className="py-8 text-center text-sm text-ink-muted">読み込み中…</p>
+        ) : state.status === 'error' ? (
+          <div className="py-8 text-center text-sm text-red-700">
+            <p className="font-bold">読み込みに失敗しました</p>
+            <p className="mt-1 text-xs text-ink-faint">
+              相手が共有をOFFにしているか、通信エラーの可能性があります。
+            </p>
+          </div>
         ) : (
           <>
             <div className="mb-4 grid grid-cols-2 gap-3 text-center text-sm">
               <div className="rounded-lg bg-surface-2 p-3">
-                <div className="text-lg font-bold">{checkins.length}</div>
-                <div className="text-ink-faint">チェックイン数</div>
+                <div className="text-lg font-bold">{state.visitedStationIds.length}</div>
+                <div className="text-ink-faint">訪問済み駅数</div>
               </div>
               <div className="rounded-lg bg-surface-2 p-3">
-                <div className="text-lg font-bold">{favoriteCount}</div>
+                <div className="text-lg font-bold">{state.favoriteCount}</div>
                 <div className="text-ink-faint">お気に入り数</div>
               </div>
             </div>
 
-            <div className="mb-4">
+            <div>
               <div className="mb-2 text-xs font-bold text-ink-muted">都道府県別制覇率</div>
               <StampBook rows={prefectureProgress} />
             </div>
-
-            {recent.length > 0 && (
-              <div>
-                <div className="mb-2 text-xs font-bold text-ink-muted">最近の訪問</div>
-                <div className="overflow-hidden rounded-lg border border-border">
-                  {recent.map((r) => {
-                    const station = allStations.find((s) => s.id === r.stationId);
-                    if (!station) return null;
-                    return (
-                      <div
-                        key={r.stationId}
-                        className="flex items-center justify-between border-b border-border bg-surface px-4 py-2.5 text-sm last:border-b-0"
-                      >
-                        <span className="font-bold">{station.name}</span>
-                        <span className="text-xs text-ink-faint">{station.prefecture}</span>
-                      </div>
-                    );
-                  })}
-                </div>
-              </div>
-            )}
+            <p className="mt-4 text-[11px] text-ink-faint">
+              プライバシーへの配慮のため、訪問日時・写真・メモは共有されません。
+            </p>
           </>
         )}
       </div>

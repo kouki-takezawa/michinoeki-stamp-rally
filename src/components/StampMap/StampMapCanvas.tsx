@@ -324,11 +324,13 @@ export function StampMapCanvas({
         className="relative overflow-hidden rounded-lg border border-border"
         style={{ background: `linear-gradient(160deg, ${skin.bgFrom}, ${skin.bgTo})` }}
       >
+        {/* 個々の駅ドットはピンチズーム前提のcanvas的UIでキーボード操作の代替が無いため、
+            静止画像を騙る role="img" は使わず支援技術からは隠す。同じデータは
+            マイページの「一覧」表示(キーボード操作可能)から同等にアクセスできる */}
         <svg
           ref={svgRef}
           viewBox={`${viewBox.x} ${viewBox.y} ${viewBox.w} ${viewBox.h}`}
-          role="img"
-          aria-label="道の駅スタンプマップ"
+          aria-hidden="true"
           className="h-[62vh] w-full touch-none"
           {...handlers}
         >

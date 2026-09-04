@@ -46,8 +46,28 @@ export default defineConfig({
               expiration: { maxEntries: 1500, maxAgeSeconds: 60 * 60 * 24 * 30 },
             },
           },
+          {
+            // 道の駅の代表画像(公式サイトのCDN)。一度表示した駅はオフラインでも見られるようにする
+            urlPattern: /^https:\/\/www\.michi-no-eki\.jp\/sites\/default\/files\/.*/,
+            handler: 'CacheFirst',
+            options: {
+              cacheName: 'station-photos',
+              expiration: { maxEntries: 1300, maxAgeSeconds: 60 * 60 * 24 * 90 },
+            },
+          },
         ],
       },
     }),
   ],
+  build: {
+    rollupOptions: {
+      output: {
+        manualChunks(id) {
+          // 全国1,231件の道の駅データ(JSONだが静的importでJSにインライン化される)を
+          // アプリ本体のロジックとは別チャンクに分離し、メインチャンクの解析コストを下げる
+          if (id.includes('data/michinoeki.json')) return 'station-data'
+        },
+      },
+    },
+  },
 })

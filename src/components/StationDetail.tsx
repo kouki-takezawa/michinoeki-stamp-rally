@@ -108,7 +108,9 @@ export function StationDetail({
           aria-label={isFavorite ? 'お気に入りから外す' : 'お気に入りに追加'}
           className={`text-2xl ${isFavorite ? 'text-amber-500' : 'text-ink-faint'}`}
         >
-          {isFavorite ? '★' : '☆'}
+          <span key={String(isFavorite)} className="favorite-pop inline-block">
+            {isFavorite ? '★' : '☆'}
+          </span>
         </button>
       </div>
 

@@ -196,3 +196,42 @@ create policy "friendships_update" on public.friendships
 drop policy if exists "friendships_delete" on public.friendships;
 create policy "friendships_delete" on public.friendships
   for delete using (requester_id = auth.uid() or addressee_id = auth.uid());
+
+-- ============================================================
+-- 9. プライバシー修正: 友達への共有を明示的なオプトインに限定し、
+--    共有される情報を「訪問済みの駅ID」のみに絞る(訪問日時・タグ・写真有無は含めない)。
+--    これまでの checkins_select / favorites_select は、承認済み友達なら
+--    無条件にchecked_in_at等まで含む全カラムを閲覧できてしまっていたため修正する。
+--    Supabaseダッシュボードの SQL Editor で一度だけ実行してください。
+-- ============================================================
+alter table public.profiles add column if not exists sharing_enabled boolean not null default false;
+
+-- 友達本人が共有をONにしている場合のみ、station_idだけを返すビュー。
+-- (Postgresのビューはデフォルトでsecurity_invoker=falseのため、所有者権限でbase tableの
+--  RLSを迂回する。auth.uid()はリクエスト単位で評価されるため、代わりにここで
+--  「本人 or 承認済み友達」かつ「sharing_enabled」であることを自前でチェックする)
+create or replace view public.friend_visible_checkins as
+  select c.user_id, c.station_id
+  from public.checkins c
+  join public.profiles p on p.id = c.user_id
+  where p.sharing_enabled = true
+    and (c.user_id = auth.uid() or public.is_friend_with(c.user_id));
+
+grant select on public.friend_visible_checkins to authenticated;
+
+-- checkins本体への直接アクセスは本人のみに戻す(友達はfriend_visible_checkinsビュー経由のみ)
+drop policy if exists "checkins_select" on public.checkins;
+create policy "checkins_select" on public.checkins
+  for select using (user_id = auth.uid());
+
+-- favorites: 行の閲覧自体を「本人の共有ONの場合のみ」に限定する(お気に入りには日時等の
+-- 機微情報は無いため列制限のビューは不要だが、オプトインの原則は同様に適用する)
+drop policy if exists "favorites_select" on public.favorites;
+create policy "favorites_select" on public.favorites
+  for select using (
+    user_id = auth.uid()
+    or (
+      public.is_friend_with(user_id)
+      and exists (select 1 from public.profiles p where p.id = user_id and p.sharing_enabled = true)
+    )
+  );

@@ -110,7 +110,9 @@ export function StationListItem({
         aria-label={isFavorite ? 'お気に入りから外す' : 'お気に入りに追加'}
         className={`px-2 text-lg ${isFavorite ? 'text-amber-500' : 'text-ink-faint'}`}
       >
-        {isFavorite ? '★' : '☆'}
+        <span key={String(isFavorite)} className="favorite-pop inline-block">
+          {isFavorite ? '★' : '☆'}
+        </span>
       </button>
       <button type="button" onClick={handleTap} className="shrink-0 px-4 py-3 font-mono text-sm font-bold text-accent">
         {formatDistance(station.distanceM)}

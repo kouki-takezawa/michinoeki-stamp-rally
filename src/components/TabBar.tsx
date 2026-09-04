@@ -1,3 +1,4 @@
+import { MOBILE_TABBAR_SPACE } from '../lib/layout';
 import { ThemeToggle } from './ThemeToggle';
 
 export type TabKey = 'nearby' | 'mypage' | 'friends';
@@ -51,10 +52,12 @@ export function TabBar({ active, onChange, onOpenSettings }: Props) {
         </div>
       </nav>
 
-      {/* モバイル：下部タブバー（高さ h-16 固定。BottomSheet等はlib/layout.tsのMOBILE_TABBAR_SPACEでこの高さぶん持ち上げる） */}
+      {/* モバイル：下部タブバー。高さはMOBILE_TABBAR_SPACE(4rem + セーフエリア)で、
+          paddingBottomでセーフエリア分だけ中身を上に逃がす（heightを固定したままpaddingを足すと
+          ホーム画面追加時など実機でセーフエリアが非ゼロになった時にコンテンツが潰れるため、高さ自体を可変にする） */}
       <nav
-        style={{ paddingBottom: 'env(safe-area-inset-bottom)' }}
-        className="fixed inset-x-0 bottom-0 z-30 flex h-16 items-center border-t border-border bg-surface lg:hidden"
+        style={{ height: MOBILE_TABBAR_SPACE, paddingBottom: 'env(safe-area-inset-bottom)' }}
+        className="fixed inset-x-0 bottom-0 z-30 flex items-center border-t border-border bg-surface lg:hidden"
       >
         {TABS.map((t) => (
           <button

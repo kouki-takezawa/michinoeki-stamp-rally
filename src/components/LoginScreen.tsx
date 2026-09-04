@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { useAuth } from '../lib/AuthContext';
+import { isSupabaseConfigured } from '../lib/supabaseClient';
 
 export function LoginScreen() {
   const { signInWithEmail } = useAuth();
@@ -26,7 +27,11 @@ export function LoginScreen() {
         <div className="mb-1 text-xs font-bold tracking-wide text-accent">道の駅ラリー</div>
         <h1 className="mb-4 text-xl font-black">ログイン</h1>
 
-        {status === 'sent' ? (
+        {!isSupabaseConfigured ? (
+          <p className="rounded-lg bg-red-50 p-4 text-sm text-red-700">
+            サーバー設定が見つかりません（VITE_SUPABASE_URL / VITE_SUPABASE_ANON_KEYが未設定です）。開発者にご確認ください。
+          </p>
+        ) : status === 'sent' ? (
           <div className="rounded-lg bg-accent-soft p-4 text-sm text-accent">
             <p className="font-bold">メールを送信しました</p>
             <p className="mt-1 text-ink-muted">

@@ -3,7 +3,8 @@ import { useFriends } from '../hooks/useFriends';
 import { FriendStampBook } from './FriendStampBook';
 
 export function FriendsScreen() {
-  const { myProfile, friendsData, loading, addByCode, accept, remove } = useFriends();
+  const { myProfile, friendsData, loading, error, addByCode, accept, remove, setSharing } = useFriends();
+  const [sharingPending, setSharingPending] = useState(false);
   const [code, setCode] = useState('');
   const [addStatus, setAddStatus] = useState<{ type: 'idle' | 'error' | 'success'; message?: string }>({
     type: 'idle',
@@ -50,6 +51,27 @@ export function FriendsScreen() {
         <p className="mt-2 text-[11px] text-ink-faint">
           このコードを友達に伝えてもらい、下の欄に入力してもらうと友達申請が送れます。
         </p>
+      </div>
+
+      <div className="mb-6 rounded-lg border border-border bg-surface p-4">
+        <label className="flex items-center justify-between gap-3">
+          <span>
+            <span className="block font-bold">友達に制覇状況を共有する</span>
+            <span className="mt-0.5 block text-[11px] text-ink-faint">
+              ONにすると、承認済みの友達があなたの訪問済み道の駅（駅名のみ）を見られます。訪問日時・写真・メモは共有されません。デフォルトはOFFです。
+            </span>
+          </span>
+          <input
+            type="checkbox"
+            checked={myProfile?.sharingEnabled ?? false}
+            disabled={!myProfile || sharingPending}
+            onChange={async (e) => {
+              setSharingPending(true);
+              await setSharing(e.target.checked);
+              setSharingPending(false);
+            }}
+          />
+        </label>
       </div>
 
       <div className="mb-6 rounded-lg border border-border bg-surface p-4">
@@ -132,6 +154,11 @@ export function FriendsScreen() {
         <div className="mb-2 text-sm font-bold">友達（{friendsData.friends.length}人）</div>
         {loading ? (
           <p className="text-sm text-ink-muted">読み込み中…</p>
+        ) : error ? (
+          <div className="rounded-lg border border-dashed border-red-300 bg-red-50 py-6 text-center text-sm text-red-700">
+            <p className="font-bold">読み込みに失敗しました</p>
+            <p className="mt-1 text-xs">オフラインの可能性があります。電波の良い場所でお試しください。</p>
+          </div>
         ) : friendsData.friends.length === 0 ? (
           <p className="rounded-lg border border-dashed border-border py-8 text-center text-sm text-ink-muted">
             まだ友達がいません。友達コードを交換して追加しましょう。

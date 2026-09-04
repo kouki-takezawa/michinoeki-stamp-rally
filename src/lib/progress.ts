@@ -7,7 +7,7 @@ export interface PrefectureRow {
 }
 
 export function computePrefectureProgress(
-  records: CheckinRecord[],
+  records: Pick<CheckinRecord, 'stationId'>[],
   stations: Station[],
 ): PrefectureRow[] {
   const totals = new Map<string, number>();

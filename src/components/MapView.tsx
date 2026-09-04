@@ -1,6 +1,7 @@
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 import { useEffect, useRef, useState } from 'react';
+import { capitalOfPrefecture } from '../lib/prefectureCapitals';
 import type { Station } from '../lib/types';
 
 interface Props {
@@ -18,6 +19,9 @@ const DEFAULT_CENTER: [number, number] = [36.2, 138.2];
 const DEFAULT_ZOOM = 5;
 const PREFECTURE_FOCUS_ZOOM = 10;
 const CLUSTER_PIXEL_SIZE = 56;
+// このズームより広域(数字より小さい)では、道の駅単位のピクセル格子クラスタではなく
+// 都道府県単位で1つの円にまとめる(全国表示で無数の数字が乱雑に並ぶのを防ぐ)
+const PREFECTURE_AGGREGATE_MAX_ZOOM = 7;
 
 const userIcon = L.divIcon({
   className: '',
@@ -70,6 +74,38 @@ export function MapView({
     const redrawNow = () => {
       const { stations, checkedInIds, favorites, highlightedId, onSelect } = dataRef.current;
       layer.clearLayers();
+
+      if (map.getZoom() <= PREFECTURE_AGGREGATE_MAX_ZOOM) {
+        // 全国俯瞰時は道の駅単位のランダムなピクセル格子クラスタだと数字だらけで見づらいため、
+        // 都道府県庁所在地に1県1円で集約する(位置が毎回ブレず落ち着いて見える)
+        const byPrefecture = new Map<string, Station[]>();
+        for (const s of stations) {
+          const list = byPrefecture.get(s.prefecture) ?? [];
+          list.push(s);
+          byPrefecture.set(s.prefecture, list);
+        }
+        for (const [prefecture, list] of byPrefecture) {
+          const capital = capitalOfPrefecture(prefecture);
+          if (!capital) continue;
+          const anyChecked = list.some((s) => checkedInIds.has(s.id));
+          const anyFavorite = list.some((s) => favorites.has(s.id));
+          const color = anyChecked ? '#3c7a37' : anyFavorite ? '#c9781f' : '#4a4436';
+          const size = Math.min(46, 22 + Math.round(Math.sqrt(list.length) * 6));
+          const icon = L.divIcon({
+            className: '',
+            html: `<div style="width:${size}px;height:${size}px;border-radius:50%;background:${color};opacity:0.88;border:2px solid white;display:flex;align-items:center;justify-content:center;color:white;font-weight:700;font-size:12px;font-family:sans-serif;box-shadow:0 1px 3px rgba(0,0,0,.3)">${list.length}</div>`,
+            iconSize: [size, size],
+            iconAnchor: [size / 2, size / 2],
+          });
+          const marker = L.marker([capital.lat, capital.lng], { icon });
+          marker.bindTooltip(prefecture, { direction: 'top', offset: [0, -4] });
+          marker.on('click', () => {
+            map.flyTo([capital.lat, capital.lng], PREFECTURE_FOCUS_ZOOM, { duration: 0.6 });
+          });
+          marker.addTo(layer);
+        }
+        return;
+      }
 
       // 表示範囲外の駅は座標変換・クラスタリング計算そのものから除外する（ズームインするほど処理対象が減る）
       const bounds = map.getBounds().pad(0.25);

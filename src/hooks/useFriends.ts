@@ -7,6 +7,7 @@ import {
   loadFriendsData,
   removeFriendship,
   sendFriendRequest,
+  setSharingEnabled,
   type FriendsData,
   type MyProfile,
 } from '../lib/friends';
@@ -18,13 +19,20 @@ export function useFriends() {
   const [myProfile, setMyProfile] = useState<MyProfile | null>(null);
   const [friendsData, setFriendsData] = useState<FriendsData>(EMPTY);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
   const refresh = useCallback(async () => {
-    if (!user) return;
+    if (!user) {
+      setLoading(false);
+      return;
+    }
     setLoading(true);
-    const [profile, data] = await Promise.all([getMyProfile(user.id), loadFriendsData(user.id)]);
-    setMyProfile(profile);
-    setFriendsData(data);
+    const [profileResult, dataResult] = await Promise.all([getMyProfile(user.id), loadFriendsData(user.id)]);
+    setMyProfile(profileResult.data);
+    setFriendsData(dataResult.data);
+    // どちらかが通信/権限エラーなら、空表示ではなくエラー表示にする(オフライン時に
+    // 「友達がいません」と誤解させないため)
+    setError(profileResult.error ?? dataResult.error);
     setLoading(false);
   }, [user]);
 
@@ -60,5 +68,15 @@ export function useFriends() {
     [refresh],
   );
 
-  return { myProfile, friendsData, loading, addByCode, accept, remove };
+  const setSharing = useCallback(
+    async (enabled: boolean): Promise<{ error: string | null }> => {
+      if (!user) return { error: 'ログインしていません' };
+      const result = await setSharingEnabled(user.id, enabled);
+      if (!result.error) setMyProfile((p) => (p ? { ...p, sharingEnabled: enabled } : p));
+      return result;
+    },
+    [user],
+  );
+
+  return { myProfile, friendsData, loading, error, addByCode, accept, remove, setSharing, refresh };
 }

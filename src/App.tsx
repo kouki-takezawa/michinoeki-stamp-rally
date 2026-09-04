@@ -1,17 +1,14 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { lazy, Suspense, useEffect, useMemo, useRef, useState } from 'react';
 import stations from './data/michinoeki.json';
 import { DetailOverlay } from './components/DetailOverlay';
 import { Footer } from './components/Footer';
-import { FriendsScreen } from './components/FriendsScreen';
 import { InstallBanner } from './components/InstallBanner';
 import { LoginScreen } from './components/LoginScreen';
 import { MilestoneModal } from './components/MilestoneModal';
-import { MyPage } from './components/MyPage';
 import { NearbyScreen } from './components/NearbyScreen';
 import { OnboardingModal } from './components/OnboardingModal';
-import { StationDetail } from './components/StationDetail';
+import { shouldShowSplash, SplashScreen } from './components/SplashScreen';
 import { TabBar, type TabKey } from './components/TabBar';
-import { SettingsPanel } from './components/SettingsPanel';
 import { useCheckins } from './hooks/useCheckins';
 import { useFavorites } from './hooks/useFavorites';
 import { useGeolocation } from './hooks/useGeolocation';
@@ -34,6 +31,19 @@ import type { Station } from './lib/types';
 const allStations = stations as Station[];
 const TAB_STORAGE_KEY = 'michinoeki-active-tab-v1';
 const PROXIMITY_THRESHOLD_M = 1000;
+
+// タブ切り替え時にしか使わない画面はコード分割し、初回ロードのJS量を減らす
+const MyPage = lazy(() => import('./components/MyPage').then((m) => ({ default: m.MyPage })));
+const FriendsScreen = lazy(() => import('./components/FriendsScreen').then((m) => ({ default: m.FriendsScreen })));
+const SettingsPanel = lazy(() => import('./components/SettingsPanel').then((m) => ({ default: m.SettingsPanel })));
+const StationDetail = lazy(() => import('./components/StationDetail').then((m) => ({ default: m.StationDetail })));
+
+const PANEL_FALLBACK = (
+  <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
+    <div className="h-10 w-10 animate-pulse rounded-full bg-surface" />
+  </div>
+);
+const SCREEN_FALLBACK = <div className="min-h-screen animate-pulse bg-surface-2" aria-hidden="true" />;
 
 function loadTab(): TabKey {
   try {
@@ -83,6 +93,7 @@ function App() {
   };
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [showOnboarding, setShowOnboarding] = useState(() => !hasSeenOnboarding());
+  const [showSplash, setShowSplash] = useState(shouldShowSplash);
   const [manualPosition, setManualPosition] = useState<{ lat: number; lng: number } | null>(null);
   const [milestoneQueue, setMilestoneQueue] = useState<Milestone[]>([]);
 
@@ -220,18 +231,29 @@ function App() {
     }
   }, [streak]);
 
+  const splashOverlay = showSplash && <SplashScreen onFinish={() => setShowSplash(false)} />;
+
   if (authLoading) {
     return (
-      <div className="flex min-h-screen items-center justify-center text-sm text-ink-muted">読み込み中…</div>
+      <>
+        {splashOverlay}
+        <div className="flex min-h-screen items-center justify-center text-sm text-ink-muted">読み込み中…</div>
+      </>
     );
   }
 
   if (!user) {
-    return <LoginScreen />;
+    return (
+      <>
+        {splashOverlay}
+        <LoginScreen />
+      </>
+    );
   }
 
   return (
     <div className="min-h-screen bg-bg text-ink">
+      {splashOverlay}
       {showOnboarding && (
         <OnboardingModal
           onFinish={() => {
@@ -260,28 +282,35 @@ function App() {
 
       {selectedStation && (
         <DetailOverlay onClose={() => setSelectedId(null)}>
-          <StationDetail
-            station={selectedStation}
-            distanceM={selectedDistance}
-            position={position}
-            isManualPosition={isManualPosition}
-            isCheckedIn={checkedInIds.has(selectedStation.id)}
-            checkedInAt={selectedRecord?.checkedInAt}
-            tag={selectedRecord?.tag}
-            isFavorite={favorites.has(selectedStation.id)}
-            onCheckIn={handleCheckIn}
-            onSetTag={setTag}
-            onSetHasPhoto={setHasPhoto}
-            onDeleteCheckin={handleDeleteCheckin}
-            onToggleFavorite={handleToggleFavorite}
-            onBack={() => setSelectedId(null)}
-          />
+          <Suspense fallback={SCREEN_FALLBACK}>
+            <StationDetail
+              station={selectedStation}
+              distanceM={selectedDistance}
+              position={position}
+              isManualPosition={isManualPosition}
+              isCheckedIn={checkedInIds.has(selectedStation.id)}
+              checkedInAt={selectedRecord?.checkedInAt}
+              tag={selectedRecord?.tag}
+              isFavorite={favorites.has(selectedStation.id)}
+              onCheckIn={handleCheckIn}
+              onSetTag={setTag}
+              onSetHasPhoto={setHasPhoto}
+              onDeleteCheckin={handleDeleteCheckin}
+              onToggleFavorite={handleToggleFavorite}
+              onBack={() => setSelectedId(null)}
+            />
+          </Suspense>
         </DetailOverlay>
       )}
 
-      {showSettings && <SettingsPanel onClose={() => setShowSettings(false)} />}
+      {showSettings && (
+        <Suspense fallback={PANEL_FALLBACK}>
+          <SettingsPanel onClose={() => setShowSettings(false)} />
+        </Suspense>
+      )}
 
       <TabBar active={tab} onChange={setTab} onOpenSettings={() => setShowSettings(true)} />
+      <div key={tab} className="tab-fade-in">
       {tab === 'nearby' ? (
         <NearbyScreen
           position={position}
@@ -305,33 +334,38 @@ function App() {
       ) : tab === 'mypage' ? (
         <div className="pb-16 lg:pb-0 lg:pl-56">
           <InstallBanner />
-          <MyPage
-            stations={allStations}
-            totalCount={totalCount}
-            checkedCount={checkedInIds.size}
-            streak={streak}
-            bestDayCount={bestDayCount}
-            prefectureProgress={prefectureProgress}
-            checkedStations={checkedStations}
-            favorites={favorites}
-            checkedInIds={checkedInIds}
-            position={isManualPosition ? null : position}
-            origin={origin}
-            onSetOrigin={setOrigin}
-            onRemoveOrigin={removeOrigin}
-            totalDistanceM={totalDistanceM}
-            onExport={exportJson}
-            onImport={handleImport}
-            onSelect={selectStation}
-          />
+          <Suspense fallback={SCREEN_FALLBACK}>
+            <MyPage
+              stations={allStations}
+              totalCount={totalCount}
+              checkedCount={checkedInIds.size}
+              streak={streak}
+              bestDayCount={bestDayCount}
+              prefectureProgress={prefectureProgress}
+              checkedStations={checkedStations}
+              favorites={favorites}
+              checkedInIds={checkedInIds}
+              position={isManualPosition ? null : position}
+              origin={origin}
+              onSetOrigin={setOrigin}
+              onRemoveOrigin={removeOrigin}
+              totalDistanceM={totalDistanceM}
+              onExport={exportJson}
+              onImport={handleImport}
+              onSelect={selectStation}
+            />
+          </Suspense>
           <Footer />
         </div>
       ) : (
         <div className="pb-16 lg:pb-0 lg:pl-56">
-          <FriendsScreen />
+          <Suspense fallback={SCREEN_FALLBACK}>
+            <FriendsScreen />
+          </Suspense>
           <Footer />
         </div>
       )}
+      </div>
     </div>
   );
 }
