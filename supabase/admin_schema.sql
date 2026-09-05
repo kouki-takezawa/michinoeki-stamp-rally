@@ -14,6 +14,17 @@
 -- ============================================================
 alter table public.profiles add column if not exists is_admin boolean not null default false;
 
+-- schema.sqlのprofiles_update_ownポリシーは「for update using (id = auth.uid())」のみで
+-- with checkの指定がなく、Postgresの仕様上usingの式がそのままwith checkにも使われる。
+-- つまり行の所有者チェックしかしておらず、列は一切制限されていない。is_admin列を追加した
+-- 直後の状態だと、一般ユーザーが自分のプロフィール行に対して
+-- PATCH /rest/v1/profiles?id=eq.<自分のid> { "is_admin": true }
+-- を直接叩くだけで自分自身を管理者に昇格できてしまう(RLSは行単位の制御であり列単位では
+-- 防げないため)。列単位の権限(GRANT/REVOKE)で塞ぐ。
+-- クライアントが直接更新して良いのはsharing_enabledのみ(display_name等はRPC経由に限定する)。
+revoke update on public.profiles from authenticated;
+grant update (sharing_enabled) on public.profiles to authenticated;
+
 -- ============================================================
 -- 2. 操作監査ログ(管理者が誰に何をしたかの記録)
 --    対象ユーザーが削除されてもログ自体は残したいので、FKはon delete set nullにし、
