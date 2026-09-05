@@ -101,7 +101,7 @@ begin
   return query
     select
       p.id,
-      u.email,
+      u.email::text,
       p.display_name,
       p.friend_code,
       p.is_admin,
@@ -145,7 +145,7 @@ begin
   return query
     select
       p.id,
-      u.email,
+      u.email::text,
       p.display_name,
       p.friend_code,
       p.is_admin,

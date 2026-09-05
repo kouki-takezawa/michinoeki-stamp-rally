@@ -56,7 +56,7 @@ export function UsersPage() {
                   <th className="px-4 py-2 font-medium">友達コード</th>
                   <th className="px-4 py-2 font-medium">チェックイン</th>
                   <th className="px-4 py-2 font-medium">お気に入り</th>
-                  <th className="px-4 py-2 font-medium">登録日</th>
+                  <th className="px-4 py-2 font-medium">登録日時</th>
                   <th className="px-4 py-2 font-medium">権限</th>
                 </tr>
               </thead>
@@ -72,8 +72,14 @@ export function UsersPage() {
                     <td className="px-4 py-2 font-mono text-xs text-stone-500">{u.friend_code}</td>
                     <td className="px-4 py-2 text-stone-600">{u.checkin_count}</td>
                     <td className="px-4 py-2 text-stone-600">{u.favorite_count}</td>
-                    <td className="px-4 py-2 text-stone-500">
-                      {new Date(u.created_at).toLocaleDateString('ja-JP')}
+                    <td className="px-4 py-2 whitespace-nowrap text-stone-500">
+                      {new Date(u.created_at).toLocaleString('ja-JP', {
+                        year: 'numeric',
+                        month: 'numeric',
+                        day: 'numeric',
+                        hour: '2-digit',
+                        minute: '2-digit',
+                      })}
                     </td>
                     <td className="px-4 py-2">
                       {u.is_admin && (
