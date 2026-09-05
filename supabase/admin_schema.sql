@@ -26,7 +26,23 @@ revoke update on public.profiles from authenticated;
 grant update (sharing_enabled) on public.profiles to authenticated;
 
 -- ============================================================
--- 2. 操作監査ログ(管理者が誰に何をしたかの記録)
+-- 2. is_admin() ヘルパー
+--    次の監査ログのRLSポリシーがこの関数を参照するため、先に定義しておく必要がある
+--    (CREATE POLICYのUSING句は作成時点で関数の存在を解決するため、後回しにすると
+--    「function public.is_admin(uuid) does not exist」で失敗する)。
+-- ============================================================
+create or replace function public.is_admin(uid uuid)
+returns boolean
+language sql
+security definer
+set search_path = public
+stable
+as $$
+  select coalesce((select is_admin from public.profiles where id = uid), false);
+$$;
+
+-- ============================================================
+-- 3. 操作監査ログ(管理者が誰に何をしたかの記録)
 --    対象ユーザーが削除されてもログ自体は残したいので、FKはon delete set nullにし、
 --    削除時点のemail/display_nameはdetailにスナップショットとして残す。
 -- ============================================================
@@ -45,19 +61,6 @@ drop policy if exists "admin_audit_log_select" on public.admin_audit_log;
 create policy "admin_audit_log_select" on public.admin_audit_log
   for select using (public.is_admin(auth.uid()));
 -- INSERT/UPDATE/DELETEのポリシーは意図的に用意しない(下記admin_log()経由のみで書き込む)
-
--- ============================================================
--- 3. is_admin() ヘルパー
--- ============================================================
-create or replace function public.is_admin(uid uuid)
-returns boolean
-language sql
-security definer
-set search_path = public
-stable
-as $$
-  select coalesce((select is_admin from public.profiles where id = uid), false);
-$$;
 
 create or replace function public.admin_log(p_action text, p_target uuid, p_detail jsonb default null)
 returns void
