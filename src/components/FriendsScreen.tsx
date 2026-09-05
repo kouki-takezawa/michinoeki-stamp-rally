@@ -8,7 +8,7 @@ interface Props {
 }
 
 export function FriendsScreen({ checkedInIds, onJumpToPrefecture }: Props) {
-  const { myProfile, friendsData, loading, error, addByCode, accept, remove, setSharing } = useFriends();
+  const { myProfile, friendsData, loading, error, addByCode, accept, remove, setSharing, refresh } = useFriends();
   const [sharingPending, setSharingPending] = useState(false);
   const [code, setCode] = useState('');
   const [addStatus, setAddStatus] = useState<{ type: 'idle' | 'error' | 'success'; message?: string }>({
@@ -50,8 +50,19 @@ export function FriendsScreen({ checkedInIds, onJumpToPrefecture }: Props) {
               コピー
             </button>
           </div>
-        ) : (
+        ) : loading ? (
           <p className="text-sm text-ink-muted">読み込み中…</p>
+        ) : (
+          <div className="flex items-center gap-2">
+            <p className="text-sm text-red-600">取得できませんでした{error ? `（${error}）` : ''}</p>
+            <button
+              type="button"
+              onClick={() => void refresh()}
+              className="shrink-0 rounded-lg border border-border px-3 py-1.5 text-xs font-bold text-accent"
+            >
+              再試行
+            </button>
+          </div>
         )}
         <p className="mt-2 text-[11px] text-ink-faint">
           このコードを友達に伝えてもらい、下の欄に入力してもらうと友達申請が送れます。

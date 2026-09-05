@@ -27,12 +27,19 @@ export function useFriends() {
       return;
     }
     setLoading(true);
-    const [profileResult, dataResult] = await Promise.all([getMyProfile(user.id), loadFriendsData(user.id)]);
-    setMyProfile(profileResult.data);
-    setFriendsData(dataResult.data);
-    // どちらかが通信/権限エラーなら、空表示ではなくエラー表示にする(オフライン時に
-    // 「友達がいません」と誤解させないため)
-    setError(profileResult.error ?? dataResult.error);
+    try {
+      const [profileResult, dataResult] = await Promise.all([getMyProfile(user.id), loadFriendsData(user.id)]);
+      setMyProfile(profileResult.data);
+      setFriendsData(dataResult.data);
+      // どちらかが通信/権限エラーなら、空表示ではなくエラー表示にする(オフライン時に
+      // 「友達がいません」と誤解させないため)
+      setError(profileResult.error ?? dataResult.error);
+    } catch (e) {
+      // getMyProfile/loadFriendsDataは{data,error}を返す設計だが、通信断などでSupabase側の
+      // fetch自体が例外を投げるケースがある。ここを捕まえないとloadingがtrueのまま固まり、
+      // 「自分の友達コード」が永遠に「読み込み中…」から進まなくなる。
+      setError(e instanceof Error ? e.message : '通信エラーが発生しました');
+    }
     setLoading(false);
   }, [user]);
 
