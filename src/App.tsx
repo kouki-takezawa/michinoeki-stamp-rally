@@ -101,6 +101,14 @@ function App() {
   const { show } = useToast();
   const { user, loading: authLoading, isPasswordRecovery } = useAuth();
   const { position: gpsPosition, status, error, start } = useGeolocation();
+
+  // ログイン後、毎回手動で「現在地を取得する」を押させないよう自動で取得を試みる。
+  // 許可済みなら黙って取得され、未回答なら通常のブラウザ許可ダイアログが出るだけで、
+  // 拒否された場合も既存の手動ボタン(NearbyScreenのlocationCta)が引き続き使える
+  useEffect(() => {
+    if (user) start();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user]);
   const {
     records,
     checkedInIds,
