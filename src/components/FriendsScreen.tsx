@@ -2,7 +2,12 @@ import { useState } from 'react';
 import { useFriends } from '../hooks/useFriends';
 import { FriendStampBook } from './FriendStampBook';
 
-export function FriendsScreen() {
+interface Props {
+  checkedInIds: Set<string>;
+  onJumpToPrefecture: (prefecture: string) => void;
+}
+
+export function FriendsScreen({ checkedInIds, onJumpToPrefecture }: Props) {
   const { myProfile, friendsData, loading, error, addByCode, accept, remove, setSharing } = useFriends();
   const [sharingPending, setSharingPending] = useState(false);
   const [code, setCode] = useState('');
@@ -180,7 +185,14 @@ export function FriendsScreen() {
         )}
       </div>
 
-      {viewingFriend && <FriendStampBook friend={viewingFriend.profile} onClose={() => setViewingFriendId(null)} />}
+      {viewingFriend && (
+        <FriendStampBook
+          friend={viewingFriend.profile}
+          myCheckedInIds={checkedInIds}
+          onJumpToPrefecture={onJumpToPrefecture}
+          onClose={() => setViewingFriendId(null)}
+        />
+      )}
     </div>
   );
 }

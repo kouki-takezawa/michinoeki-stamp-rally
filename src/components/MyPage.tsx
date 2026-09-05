@@ -119,70 +119,72 @@ export function MyPage({
         </div>
       )}
 
-      <div className="mb-6 rounded-lg border border-border bg-surface p-4">
-        <div className="mb-1 flex items-baseline justify-between">
-          <span className="text-sm font-bold">全国制覇率</span>
-          <span className="font-mono text-sm text-ink-muted">
-            {checkedCount} / {totalCount}
-          </span>
+      <div className="mb-6 grid gap-4 lg:grid-cols-3">
+        <div className="rounded-lg border border-border bg-surface p-4">
+          <div className="mb-1 flex items-baseline justify-between">
+            <span className="text-sm font-bold">全国制覇率</span>
+            <span className="font-mono text-sm text-ink-muted">
+              {checkedCount} / {totalCount}
+            </span>
+          </div>
+          <div className="h-2 w-full overflow-hidden rounded-full bg-surface-2">
+            <div className="h-full bg-accent transition-all" style={{ width: `${pct}%` }} />
+          </div>
+          {bestDayCount > 1 && (
+            <p className="mt-2 text-xs text-ink-faint">自己ベスト：1日で{bestDayCount}件チェックイン</p>
+          )}
+          <div className="mt-3">
+            <ShareButton
+              headline={`制覇率 ${pct}%`}
+              subline="道の駅診断・スタンプラリー"
+              statLabel="チェックイン数"
+              statValue={`${checkedCount} / ${totalCount}`}
+              shareText={`道の駅診断・スタンプラリーで${checkedCount}件チェックインしました（制覇率${pct}%）！ #道の駅診断スタンプラリー`}
+              className="rounded-lg border border-border bg-surface-2 px-3 py-1.5 text-xs font-bold text-accent"
+              label="この記録をシェア"
+            />
+          </div>
         </div>
-        <div className="h-2 w-full overflow-hidden rounded-full bg-surface-2">
-          <div className="h-full bg-accent transition-all" style={{ width: `${pct}%` }} />
+
+        <div className="rounded-lg border border-border bg-surface p-4">
+          <div className="mb-2 text-sm font-bold">出発地点からの総距離</div>
+          <OriginPicker origin={origin} onSet={onSetOrigin} onRemove={onRemoveOrigin} />
+          {origin && (
+            <div className="mt-3 grid grid-cols-3 gap-2 text-center text-xs">
+              <div className="rounded-lg bg-surface-2 p-2">
+                <div className="text-base font-bold">{formatDistance(totalDistanceM)}</div>
+                <div className="text-ink-faint">総距離(直線)</div>
+              </div>
+              <div className="rounded-lg bg-surface-2 p-2">
+                <div className="text-base font-bold">¥{fuel.costYen.toLocaleString()}</div>
+                <div className="text-ink-faint">燃料費目安</div>
+              </div>
+              <div className="rounded-lg bg-surface-2 p-2">
+                <div className="text-base font-bold">{fuel.co2Kg}kg</div>
+                <div className="text-ink-faint">CO2排出目安</div>
+              </div>
+            </div>
+          )}
+          <p className="mt-2 text-[11px] text-ink-faint">
+            道路距離ではなく出発地点から各道の駅までの直線距離の合計です。燃料費・CO2は目安値です。
+          </p>
         </div>
-        {bestDayCount > 1 && (
-          <p className="mt-2 text-xs text-ink-faint">自己ベスト：1日で{bestDayCount}件チェックイン</p>
-        )}
-        <div className="mt-3">
-          <ShareButton
-            headline={`制覇率 ${pct}%`}
-            subline="道の駅診断・スタンプラリー"
-            statLabel="チェックイン数"
-            statValue={`${checkedCount} / ${totalCount}`}
-            shareText={`道の駅診断・スタンプラリーで${checkedCount}件チェックインしました（制覇率${pct}%）！ #道の駅診断スタンプラリー`}
-            className="rounded-lg border border-border bg-surface-2 px-3 py-1.5 text-xs font-bold text-accent"
-            label="この記録をシェア"
+
+        <div className="rounded-lg border border-border bg-surface p-4">
+          <div className="mb-2 text-sm font-bold">目標</div>
+          <GoalTracker
+            goal={goal}
+            currentCount={checkedCount}
+            onSet={(g) => {
+              saveGoal(g);
+              setGoalState(g);
+            }}
+            onClear={() => {
+              clearGoal();
+              setGoalState(null);
+            }}
           />
         </div>
-      </div>
-
-      <div className="mb-6 rounded-lg border border-border bg-surface p-4">
-        <div className="mb-2 text-sm font-bold">出発地点からの総距離</div>
-        <OriginPicker origin={origin} onSet={onSetOrigin} onRemove={onRemoveOrigin} />
-        {origin && (
-          <div className="mt-3 grid grid-cols-3 gap-2 text-center text-xs">
-            <div className="rounded-lg bg-surface-2 p-2">
-              <div className="text-base font-bold">{formatDistance(totalDistanceM)}</div>
-              <div className="text-ink-faint">総距離(直線)</div>
-            </div>
-            <div className="rounded-lg bg-surface-2 p-2">
-              <div className="text-base font-bold">¥{fuel.costYen.toLocaleString()}</div>
-              <div className="text-ink-faint">燃料費目安</div>
-            </div>
-            <div className="rounded-lg bg-surface-2 p-2">
-              <div className="text-base font-bold">{fuel.co2Kg}kg</div>
-              <div className="text-ink-faint">CO2排出目安</div>
-            </div>
-          </div>
-        )}
-        <p className="mt-2 text-[11px] text-ink-faint">
-          道路距離ではなく出発地点から各道の駅までの直線距離の合計です。燃料費・CO2は目安値です。
-        </p>
-      </div>
-
-      <div className="mb-6 rounded-lg border border-border bg-surface p-4">
-        <div className="mb-2 text-sm font-bold">目標</div>
-        <GoalTracker
-          goal={goal}
-          currentCount={checkedCount}
-          onSet={(g) => {
-            saveGoal(g);
-            setGoalState(g);
-          }}
-          onClear={() => {
-            clearGoal();
-            setGoalState(null);
-          }}
-        />
       </div>
 
       <div className="mb-6">
@@ -265,7 +267,7 @@ export function MyPage({
       </div>
 
       {checkedStations.length > 0 && (
-        <>
+        <div className="lg:grid lg:grid-cols-2 lg:items-start lg:gap-4">
           <AnnualReportCard checkedStations={checkedStations} />
           <div className="mb-6 rounded-lg border border-border bg-surface p-4">
             <div className="mb-3 text-sm font-bold">訪問の傾向</div>
@@ -275,12 +277,13 @@ export function MyPage({
               <VisitCalendar records={checkedStations} />
             </div>
           </div>
-        </>
+        </div>
       )}
 
-      <PhotoAlbum checkedStations={checkedStations} onSelect={onSelect} />
-
-      <GourmetCatalog stations={stations} onSelect={onSelect} />
+      <div className="lg:grid lg:grid-cols-2 lg:items-start lg:gap-4">
+        <PhotoAlbum checkedStations={checkedStations} onSelect={onSelect} />
+        <GourmetCatalog stations={stations} onSelect={onSelect} />
+      </div>
 
       <RecommendedStations
         stations={stations}

@@ -26,6 +26,7 @@ export function useSwipeBack(onBack: () => void) {
     const dy = Math.abs(e.touches[0].clientY - startY.current);
     if (dx > THRESHOLD && dy < MAX_VERTICAL_DRIFT) {
       active.current = false;
+      if (navigator.vibrate) navigator.vibrate(12);
       onBack();
     }
   };

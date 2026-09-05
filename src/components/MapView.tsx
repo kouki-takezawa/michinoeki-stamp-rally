@@ -64,7 +64,14 @@ export function MapView({
 
   useEffect(() => {
     if (!containerRef.current) return;
-    const map = L.map(containerRef.current, { preferCanvas: true, zoomControl: false }).setView(
+    const map = L.map(containerRef.current, {
+      preferCanvas: true,
+      zoomControl: false,
+      // ホイールズームを0.5刻みにして硬いカクつきを減らす(整数刻みだと1段ごとの変化が大きすぎる)
+      zoomSnap: 0.5,
+      zoomDelta: 0.5,
+      wheelPxPerZoomLevel: 100,
+    }).setView(
       DEFAULT_CENTER,
       DEFAULT_ZOOM,
     );
@@ -160,6 +167,12 @@ export function MapView({
             L.DomEvent.stopPropagation(e);
             onMarkerTap(s.id);
           });
+          // PC向け: 右クリックでもプレビューを開く(ブラウザの既定コンテキストメニューは出さない)
+          marker.on('contextmenu', (e) => {
+            L.DomEvent.stopPropagation(e);
+            e.originalEvent.preventDefault();
+            onMarkerTap(s.id);
+          });
           marker.addTo(layer);
         } else {
           const anyChecked = bucket.points.some((s) => checkedInIds.has(s.id));
@@ -198,14 +211,27 @@ export function MapView({
     map.on('moveend zoomend', redraw);
     redrawNow();
 
+    // サイドバーの折りたたみ等でコンテナ幅が変わってもLeafletは自動検知しないため、
+    // ResizeObserverで気付いてinvalidateSize()する(放置すると見た目のズレやクリック判定のズレが起きる)
+    const resizeObserver = new ResizeObserver(() => {
+      map.invalidateSize();
+    });
+    resizeObserver.observe(containerRef.current);
+
     return () => {
       map.off('moveend zoomend', redraw);
+      resizeObserver.disconnect();
       if (redrawFrameRef.current !== null) cancelAnimationFrame(redrawFrameRef.current);
       map.remove();
       mapRef.current = null;
       layerRef.current = null;
       userMarkerRef.current = null;
       accuracyCircleRef.current = null;
+      // 地図インスタンス自体が作り直されるので、新インスタンスではまだ一度も現在地へ
+      // flyToしていない状態に戻す(StrictModeの開発時二重マウントで地図が一瞬だけ
+      // 作り直された際、古いインスタンス向けのhasFlownフラグが残って新インスタンスでは
+      // 二度とflyToされなくなるのを防ぐ)
+      hasFlownRef.current = false;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -321,6 +347,7 @@ export function MapView({
             type="button"
             onClick={() => mapRef.current?.zoomIn()}
             aria-label="ズームイン"
+            title="ズームイン"
             className="flex h-10 w-10 items-center justify-center text-lg font-bold text-ink hover:bg-surface-2"
           >
             +
@@ -330,6 +357,7 @@ export function MapView({
             type="button"
             onClick={() => mapRef.current?.zoomOut()}
             aria-label="ズームアウト"
+            title="ズームアウト"
             className="flex h-10 w-10 items-center justify-center text-lg font-bold text-ink hover:bg-surface-2"
           >
             −
@@ -339,6 +367,7 @@ export function MapView({
           type="button"
           onClick={handleLocateClick}
           aria-label="現在地に移動"
+          title="現在地に移動"
           className="flex h-10 w-10 items-center justify-center rounded-full bg-surface text-accent shadow-lg hover:bg-surface-2"
         >
           <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true">

@@ -18,6 +18,8 @@ import { computeStreak, maxCheckinsInOneDay } from '../lib/streak';
 import type { CheckinRecord, CheckinTag, Station } from '../lib/types';
 
 const allStations = stations as Station[];
+// チェックインのたびに全1200件超を線形探索しないよう、一度だけMapを作って使い回す
+const stationById = new Map(allStations.map((s) => [s.id, s]));
 
 export function useCheckins() {
   const [records, setRecords] = useState<CheckinRecord[]>(() => loadCheckins());
@@ -99,7 +101,7 @@ export function useCheckins() {
     () =>
       records
         .map((r) => {
-          const station = allStations.find((s) => s.id === r.stationId);
+          const station = stationById.get(r.stationId);
           return station ? { ...station, ...r } : null;
         })
         .filter(

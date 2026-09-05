@@ -1,4 +1,4 @@
-import { useRef } from 'react';
+import { useRef, useState } from 'react';
 import { useToast } from '../lib/ToastContext';
 
 interface Props {
@@ -9,11 +9,9 @@ interface Props {
 export function ImportExportPanel({ onExport, onImport }: Props) {
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const { show } = useToast();
+  const [dragOver, setDragOver] = useState(false);
 
-  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    e.target.value = '';
-    if (!file) return;
+  const runImport = async (file: File) => {
     try {
       await onImport(file);
     } catch (err) {
@@ -21,11 +19,40 @@ export function ImportExportPanel({ onExport, onImport }: Props) {
     }
   };
 
+  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    e.target.value = '';
+    if (!file) return;
+    await runImport(file);
+  };
+
+  const handleDrop = async (e: React.DragEvent) => {
+    e.preventDefault();
+    setDragOver(false);
+    const file = e.dataTransfer.files?.[0];
+    if (!file) return;
+    if (file.type && file.type !== 'application/json' && !file.name.endsWith('.json')) {
+      show('JSONファイルを指定してください', 'error');
+      return;
+    }
+    await runImport(file);
+  };
+
   return (
-    <div className="rounded-lg border border-border bg-surface p-4">
+    <div
+      onDragOver={(e) => {
+        e.preventDefault();
+        setDragOver(true);
+      }}
+      onDragLeave={() => setDragOver(false)}
+      onDrop={handleDrop}
+      className={`rounded-lg border p-4 transition-colors ${
+        dragOver ? 'border-accent bg-accent-soft' : 'border-border bg-surface'
+      }`}
+    >
       <div className="mb-2 text-sm font-bold">機種変更に備えたバックアップ</div>
       <p className="mb-3 text-xs text-ink-muted">
-        チェックイン履歴はこの端末のブラウザにのみ保存されます。JSONファイルとして書き出し・読み込みができます。
+        チェックイン履歴はこの端末のブラウザにのみ保存されます。JSONファイルとして書き出し・読み込みができます（PCでは書き出したファイルをこのカードにドラッグ＆ドロップしても読み込めます）。
       </p>
       <div className="flex gap-2">
         <button

@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { useAuth } from '../lib/AuthContext';
 import { requestNotificationPermission } from '../lib/notifications';
 import { usePreferences, type Skin } from '../lib/PreferencesContext';
-import { addProfile, loadActiveProfileId, loadProfiles, setActiveProfileId } from '../lib/profiles';
+import { addProfile, deleteProfile, loadActiveProfileId, loadProfiles, setActiveProfileId } from '../lib/profiles';
 import { useTheme } from '../lib/ThemeContext';
 import { NewBadge } from './NewBadge';
 
@@ -30,6 +30,14 @@ export function SettingsPanel({ onClose }: Props) {
     const next = addProfile(newProfileName.trim());
     setProfiles(next);
     setNewProfileName('');
+  };
+
+  const handleDeleteProfile = (id: string, name: string) => {
+    if (!window.confirm(`「${name}」を削除しますか？このプロフィールのチェックイン・お気に入りも削除されます`)) return;
+    const wasActive = activeProfileId === id;
+    const next = deleteProfile(id);
+    setProfiles(next);
+    if (wasActive) window.location.reload();
   };
 
   return (
@@ -182,16 +190,30 @@ export function SettingsPanel({ onClose }: Props) {
             </p>
             <div className="mb-2 space-y-1">
               {profiles.map((p) => (
-                <button
+                <div
                   key={p.id}
-                  type="button"
-                  onClick={() => switchProfile(p.id)}
-                  aria-pressed={activeProfileId === p.id}
-                  className={`flex w-full items-center gap-2 rounded-lg border px-3 py-2 text-left ${activeProfileId === p.id ? 'border-accent bg-accent-soft text-accent' : 'border-border'}`}
+                  className={`flex items-center gap-2 rounded-lg border px-3 py-2 ${activeProfileId === p.id ? 'border-accent bg-accent-soft text-accent' : 'border-border'}`}
                 >
-                  <span aria-hidden="true">{p.emoji}</span>
-                  {p.name}
-                </button>
+                  <button
+                    type="button"
+                    onClick={() => switchProfile(p.id)}
+                    aria-pressed={activeProfileId === p.id}
+                    className="flex flex-1 items-center gap-2 text-left"
+                  >
+                    <span aria-hidden="true">{p.emoji}</span>
+                    {p.name}
+                  </button>
+                  {p.id !== 'default' && (
+                    <button
+                      type="button"
+                      onClick={() => handleDeleteProfile(p.id, p.name)}
+                      aria-label={`${p.name}を削除`}
+                      className="text-xs text-ink-faint underline"
+                    >
+                      削除
+                    </button>
+                  )}
+                </div>
               ))}
             </div>
             <div className="flex gap-2">

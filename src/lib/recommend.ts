@@ -14,6 +14,7 @@ export function recommendStations(
   checkedStations: (Station & CheckinRecord)[],
   position: { lat: number; lng: number } | null,
   limit = 5,
+  distanceMap?: Map<string, number>,
 ): Station[] {
   const facilityWeight = new Map<string, number>();
   for (const s of checkedStations) {
@@ -29,8 +30,8 @@ export function recommendStations(
     .map((s) => {
       const matchScore = (s.facilities ?? []).reduce((sum, f) => sum + (facilityWeight.get(f) ?? 0), 0);
       let proximityScore = 0;
-      if (position) {
-        const distanceM = distanceMeters(position.lat, position.lng, s.lat, s.lng);
+      const distanceM = distanceMap?.get(s.id) ?? (position ? distanceMeters(position.lat, position.lng, s.lat, s.lng) : undefined);
+      if (distanceM !== undefined) {
         proximityScore = Math.max(0, 1 - distanceM / 150000);
       }
       return { station: s, score: matchScore * 2 + proximityScore * 3 };

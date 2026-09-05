@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
+import { resizeImageForStorage } from '../lib/imageResize';
 import { deletePhoto, getPhoto, savePhoto } from '../lib/photos';
 
 interface Props {
@@ -28,9 +29,10 @@ export function PhotoPicker({ stationId, onChange }: Props) {
   }, [stationId]);
 
   const handleFile = async (file: File) => {
-    await savePhoto(stationId, file);
+    const resized = await resizeImageForStorage(file);
+    await savePhoto(stationId, resized);
     if (urlRef.current) URL.revokeObjectURL(urlRef.current);
-    const url = URL.createObjectURL(file);
+    const url = URL.createObjectURL(resized);
     urlRef.current = url;
     setPreviewUrl(url);
     onChange(true);

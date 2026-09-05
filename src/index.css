@@ -17,6 +17,11 @@
   --color-accent-soft: #dfeedb;
 }
 
+:root {
+  /* デスクトップ左サイドバーの幅。TabBar.tsxの折りたたみ操作でJSから書き換える */
+  --sidebar-w: 14rem;
+}
+
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme='light']) {
     --color-bg: #1b1a17;
@@ -226,6 +231,27 @@ h3 {
 }
 .territory-flash {
   animation: territory-flash 1.4s ease-out;
+}
+
+/* PC10: スタンプ帳・年間レポート等を紙/PDFに残しやすくする最低限の印刷対応。
+   SPAなのでルート単位の出し分けはできないため、ナビ・操作用ボタン類を隠して
+   本文を通常のドキュメントフローに戻すだけの汎用ルールにとどめる。 */
+@media print {
+  nav,
+  button,
+  input,
+  select,
+  .pointer-events-none {
+    display: none !important;
+  }
+  body,
+  #root {
+    height: auto !important;
+    overflow: visible !important;
+  }
+  .fixed {
+    position: static !important;
+  }
 }
 
 /* タブ切り替え時のクロスフェード */

@@ -9,21 +9,25 @@ import { NearbyScreen } from './components/NearbyScreen';
 import { OnboardingModal } from './components/OnboardingModal';
 import { SetNewPasswordScreen } from './components/SetNewPasswordScreen';
 import { shouldShowSplash, SplashScreen } from './components/SplashScreen';
-import { TabBar, type TabKey } from './components/TabBar';
+import { TAB_ORDER, TabBar, type TabKey } from './components/TabBar';
 import { useCheckins } from './hooks/useCheckins';
 import { useFavorites } from './hooks/useFavorites';
 import { useGeolocation } from './hooks/useGeolocation';
 import { useJourney } from './hooks/useJourney';
+import { useStationDistances } from './hooks/useStationDistances';
+import { useTabSwipe } from './hooks/useTabSwipe';
 import { useAuth } from './lib/AuthContext';
 import { celebrateBigMilestone, celebrateCheckin, vibrateFavorite } from './lib/celebrate';
 import { reconcileCheckinsToCloud, reconcileFavoritesToCloud } from './lib/cloudSync';
-import { distanceMeters, formatDistance } from './lib/distance';
+import { formatDistance } from './lib/distance';
 import type { Milestone } from './lib/milestones';
 import { hasSeenCoachMark, markCoachMarkSeen } from './lib/coachMarks';
+import { loadGoal } from './lib/goals';
 import { hasSeenOnboarding, markOnboardingSeen } from './lib/onboarding';
 import { notifyProximity } from './lib/notifications';
 import { usePreferences } from './lib/PreferencesContext';
 import { recordRecentStation } from './lib/recentActivity';
+import { recommendStations } from './lib/recommend';
 import { buildShareCanvas, shareImage } from './lib/share';
 import { speak } from './lib/speech';
 import { useToast } from './lib/ToastContext';
@@ -97,6 +101,11 @@ function App() {
   const [showSplash, setShowSplash] = useState(shouldShowSplash);
   const [manualPosition, setManualPosition] = useState<{ lat: number; lng: number } | null>(null);
   const [milestoneQueue, setMilestoneQueue] = useState<Milestone[]>([]);
+  const [prefectureJump, setPrefectureJump] = useState<{ prefecture: string; token: number } | null>(null);
+  const jumpToPrefecture = (prefecture: string) => {
+    setPrefectureJump({ prefecture, token: Date.now() });
+    setTab('nearby');
+  };
 
   const { show } = useToast();
   const { user, loading: authLoading, isPasswordRecovery } = useAuth();
@@ -144,10 +153,12 @@ function App() {
     [selectedId],
   );
 
+  const distanceMap = useStationDistances(allStations, position);
+
   const selectedDistance = useMemo(() => {
-    if (!selectedStation || !position) return null;
-    return distanceMeters(position.lat, position.lng, selectedStation.lat, selectedStation.lng);
-  }, [selectedStation, position]);
+    if (!selectedStation) return null;
+    return distanceMap.get(selectedStation.id) ?? null;
+  }, [selectedStation, distanceMap]);
 
   const selectedRecord = useMemo(
     () => checkedStations.find((s) => s.id === selectedId),
@@ -155,6 +166,7 @@ function App() {
   );
 
   const handleCheckIn = (id: string) => {
+    const countBefore = checkedInIds.size;
     const milestones = checkIn(id);
     show('チェックインしました！', 'success');
     if (preferences.drivingMode) speak('チェックインしました');
@@ -164,6 +176,22 @@ function App() {
       celebrateCheckin();
     }
     if (milestones.length > 0) setMilestoneQueue(milestones);
+
+    // UX4: 設定した目標をちょうど達成した瞬間に専用のお祝いを出す(通常のマイルストーンとは
+    // 別軸の「自分で決めた目標」なので、milestoneQueueとは独立に扱う)
+    const goal = loadGoal();
+    if (goal && countBefore < goal.targetCount && countBefore + 1 >= goal.targetCount) {
+      celebrateBigMilestone();
+      show(`🎉 目標「${goal.label}」を達成しました！`, 'success');
+    }
+
+    // UX2: チェックインの流れで、マイページに行かなくてもその場で次の候補を提示する
+    const next = recommendStations(allStations, checkedStations, position, 3, distanceMap).find((s) => s.id !== id);
+    if (next) {
+      show(`次のおすすめ：${next.name}（${next.prefecture}）`, {
+        action: { label: '見る', onClick: () => selectStation(next.id) },
+      });
+    }
   };
 
   const handleDeleteCheckin = (id: string) => {
@@ -197,6 +225,14 @@ function App() {
 
   const currentMilestone = milestoneQueue[0];
 
+  // モバイル: 画面端からのスワイプでタブを切り替える(地図のパンや横スクロールストリップと
+  // 衝突しないよう、端からの操作だけを対象にしたuseTabSwipe側の制約に乗る)
+  const tabIndex = TAB_ORDER.indexOf(tab);
+  const tabSwipe = useTabSwipe(
+    () => tabIndex < TAB_ORDER.length - 1 && setTab(TAB_ORDER[tabIndex + 1]),
+    () => tabIndex > 0 && setTab(TAB_ORDER[tabIndex - 1]),
+  );
+
   const selectStation = (id: string) => {
     recordRecentStation(id);
     setSelectedId(id);
@@ -208,13 +244,13 @@ function App() {
     if (!preferences.proximityAlerts || isManualPosition || !gpsPosition) return;
     for (const s of allStations) {
       if (checkedInIds.has(s.id) || notifiedIdsRef.current.has(s.id)) continue;
-      const distanceM = distanceMeters(gpsPosition.lat, gpsPosition.lng, s.lat, s.lng);
-      if (distanceM <= PROXIMITY_THRESHOLD_M) {
+      const distanceM = distanceMap.get(s.id);
+      if (distanceM !== undefined && distanceM <= PROXIMITY_THRESHOLD_M) {
         notifiedIdsRef.current.add(s.id);
         notifyProximity(s.name, formatDistance(distanceM));
       }
     }
-  }, [gpsPosition, isManualPosition, checkedInIds, preferences.proximityAlerts]);
+  }, [gpsPosition, isManualPosition, checkedInIds, preferences.proximityAlerts, distanceMap]);
 
   // ログイン中は、チェックイン・お気に入りの変更をその都度Supabaseへ反映する（友達がスタンプ帳を見られるように）
   useEffect(() => {
@@ -226,6 +262,40 @@ function App() {
     if (!user) return;
     void reconcileFavoritesToCloud(user.id, favorites);
   }, [user, favorites]);
+
+  // オフラインになったこと・復帰したことを明示する(チェックイン等はローカルには残るが、
+  // クラウド同期や友達データの取得が裏で失敗し続けていることに気づけるように)
+  useEffect(() => {
+    const handleOffline = () => show('オフラインになりました。記録は端末に保存され、オンライン復帰時に同期されます', 'error');
+    const handleOnline = () => show('オンラインに復帰しました', 'success');
+    window.addEventListener('offline', handleOffline);
+    window.addEventListener('online', handleOnline);
+    return () => {
+      window.removeEventListener('offline', handleOffline);
+      window.removeEventListener('online', handleOnline);
+    };
+  }, [show]);
+
+  // PC向けショートカット: "/"でどこからでも検索欄にフォーカス、Escで開いている画面を手前から順に閉じる
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => {
+      const target = e.target as HTMLElement | null;
+      const isTyping = target && ['INPUT', 'SELECT', 'TEXTAREA'].includes(target.tagName);
+
+      if (e.key === '/' && !isTyping) {
+        e.preventDefault();
+        document.querySelector<HTMLInputElement>('input[aria-label="道の駅名で検索"]')?.focus();
+        return;
+      }
+      if (e.key === 'Escape') {
+        if (selectedId !== null) setSelectedId(null);
+        else if (showSettings) setShowSettings(false);
+        else if (milestoneQueue.length > 0) setMilestoneQueue((q) => q.slice(1));
+      }
+    };
+    window.addEventListener('keydown', handler);
+    return () => window.removeEventListener('keydown', handler);
+  }, [selectedId, showSettings, milestoneQueue.length]);
 
   // D20: ホーム画面アイコンに連続記録日数をバッジ表示（対応ブラウザのみ。ホームウィジェットの簡易代替）
   useEffect(() => {
@@ -328,7 +398,12 @@ function App() {
       )}
 
       <TabBar active={tab} onChange={setTab} onOpenSettings={() => setShowSettings(true)} />
-      <div key={tab} className="tab-fade-in">
+      <div
+        key={tab}
+        className="tab-fade-in"
+        onTouchStart={tabSwipe.onTouchStart}
+        onTouchEnd={tabSwipe.onTouchEnd}
+      >
       {tab === 'nearby' ? (
         <NearbyScreen
           position={position}
@@ -348,9 +423,11 @@ function App() {
           favorites={favorites}
           onToggleFavorite={handleToggleFavorite}
           onSelect={selectStation}
+          prefectureJump={prefectureJump}
+          distanceMap={distanceMap}
         />
       ) : tab === 'mypage' ? (
-        <div className="pb-16 lg:pb-0 lg:pl-56">
+        <div className="pb-16 lg:pb-0 lg:pl-[var(--sidebar-w)]">
           <InstallBanner />
           <Suspense fallback={SCREEN_FALLBACK}>
             <MyPage
@@ -376,9 +453,9 @@ function App() {
           <Footer />
         </div>
       ) : (
-        <div className="pb-16 lg:pb-0 lg:pl-56">
+        <div className="pb-16 lg:pb-0 lg:pl-[var(--sidebar-w)]">
           <Suspense fallback={SCREEN_FALLBACK}>
-            <FriendsScreen />
+            <FriendsScreen checkedInIds={checkedInIds} onJumpToPrefecture={jumpToPrefecture} />
           </Suspense>
           <Footer />
         </div>

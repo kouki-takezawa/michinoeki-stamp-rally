@@ -10,6 +10,8 @@ const allStations = stations as Station[];
 
 interface Props {
   friend: FriendProfile;
+  myCheckedInIds: Set<string>;
+  onJumpToPrefecture: (prefecture: string) => void;
   onClose: () => void;
 }
 
@@ -18,7 +20,7 @@ type LoadState =
   | { status: 'error' }
   | { status: 'ok'; visitedStationIds: string[]; favoriteCount: number };
 
-export function FriendStampBook({ friend, onClose }: Props) {
+export function FriendStampBook({ friend, myCheckedInIds, onJumpToPrefecture, onClose }: Props) {
   const [state, setState] = useState<LoadState>({ status: 'loading' });
 
   useEffect(() => {
@@ -46,6 +48,23 @@ export function FriendStampBook({ friend, onClose }: Props) {
           allStations,
         )
       : [];
+
+  // 「自分もこの県に行ってみる」導線: 友達が訪問済みで自分が未訪問の都道府県のうち、
+  // 友達の訪問件数が最も多いものを1件だけ提案する（複数出すと押し付けがましくなるため）
+  const myVisitedPrefectures =
+    state.status === 'ok' ? new Set(allStations.filter((s) => myCheckedInIds.has(s.id)).map((s) => s.prefecture)) : null;
+  let suggestion: { prefecture: string; count: number } | null = null;
+  if (state.status === 'ok' && myVisitedPrefectures) {
+    const counts = new Map<string, number>();
+    for (const id of state.visitedStationIds) {
+      const st = allStations.find((s) => s.id === id);
+      if (!st || myVisitedPrefectures.has(st.prefecture)) continue;
+      counts.set(st.prefecture, (counts.get(st.prefecture) ?? 0) + 1);
+    }
+    for (const [prefecture, count] of counts) {
+      if (!suggestion || count > suggestion.count) suggestion = { prefecture, count };
+    }
+  }
 
   return (
     <div
@@ -87,6 +106,25 @@ export function FriendStampBook({ friend, onClose }: Props) {
               <div className="mb-2 text-xs font-bold text-ink-muted">都道府県別制覇率</div>
               <StampBook rows={prefectureProgress} />
             </div>
+
+            {suggestion && (
+              <div className="mt-4 rounded-lg border border-accent/40 bg-accent-soft p-3 text-sm">
+                <p className="mb-2">
+                  {friend.displayName}さんは<strong>{suggestion.prefecture}</strong>
+                  の道の駅を{suggestion.count}件訪問済みですが、あなたはまだ訪問していません。
+                </p>
+                <button
+                  type="button"
+                  onClick={() => {
+                    onJumpToPrefecture(suggestion.prefecture);
+                    onClose();
+                  }}
+                  className="rounded-lg bg-accent px-3 py-1.5 text-xs font-bold text-white"
+                >
+                  自分も{suggestion.prefecture}に行ってみる →
+                </button>
+              </div>
+            )}
             <p className="mt-4 text-[11px] text-ink-faint">
               プライバシーへの配慮のため、訪問日時・写真・メモは共有されません。
             </p>

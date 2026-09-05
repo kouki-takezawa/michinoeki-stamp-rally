@@ -121,20 +121,38 @@ export async function loadFriendsData(myId: string): Promise<Result<FriendsData>
   return { data: { friends, incomingRequests, outgoingRequests }, error: null };
 }
 
+// 友達のスタンプ帳は同じ人を続けて開くこともあるため、短時間だけ結果をキャッシュして
+// 無駄な再取得を避ける(友達自身のチェックインは他人からは頻繁には変わらないため60秒で十分)
+const STAMP_BOOK_CACHE_MS = 60_000;
+const visitedCache = new Map<string, { data: Result<string[]>; at: number }>();
+const favoritesCache = new Map<string, { data: Result<Set<string>>; at: number }>();
+
 // 友達に公開してよい範囲は「訪問済みの駅ID」のみ(訪問日時・タグ・写真有無は含めない)。
 // 本人がsharing_enabledをONにしていない限り、DB側(friend_visible_checkinsビュー)が
 // そもそも行を返さないため、ここでは取得したIDをそのまま使ってよい。
 export async function loadFriendVisitedStationIds(friendId: string): Promise<Result<string[]>> {
+  const cached = visitedCache.get(friendId);
+  if (cached && Date.now() - cached.at < STAMP_BOOK_CACHE_MS) return cached.data;
+
   const { data, error } = await supabase
     .from('friend_visible_checkins')
     .select('station_id')
     .eq('user_id', friendId);
-  if (error) return { data: [], error: error.message };
-  return { data: (data ?? []).map((r) => r.station_id), error: null };
+  const result: Result<string[]> = error
+    ? { data: [], error: error.message }
+    : { data: (data ?? []).map((r) => r.station_id), error: null };
+  if (!error) visitedCache.set(friendId, { data: result, at: Date.now() });
+  return result;
 }
 
 export async function loadFriendFavorites(friendId: string): Promise<Result<Set<string>>> {
+  const cached = favoritesCache.get(friendId);
+  if (cached && Date.now() - cached.at < STAMP_BOOK_CACHE_MS) return cached.data;
+
   const { data, error } = await supabase.from('favorites').select('station_id').eq('user_id', friendId);
-  if (error) return { data: new Set(), error: error.message };
-  return { data: new Set((data ?? []).map((r) => r.station_id)), error: null };
+  const result: Result<Set<string>> = error
+    ? { data: new Set(), error: error.message }
+    : { data: new Set((data ?? []).map((r) => r.station_id)), error: null };
+  if (!error) favoritesCache.set(friendId, { data: result, at: Date.now() });
+  return result;
 }

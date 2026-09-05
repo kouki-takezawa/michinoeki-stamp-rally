@@ -96,7 +96,7 @@ export function StationDetail({
   }, [station.id]);
 
   return (
-    <div className="mx-auto max-w-xl px-4 py-6">
+    <div className={`mx-auto max-w-xl px-4 py-6 ${!isCheckedIn && eligible ? 'pb-24 lg:pb-6' : ''}`}>
       <div className="mb-4 flex items-center justify-between">
         <button type="button" onClick={onBack} className="text-sm text-ink-muted hover:text-ink">
           ← 一覧に戻る
@@ -277,6 +277,23 @@ export function StationDetail({
           チェックインは距離300m以内・位置情報の自己申告に基づく簡易判定です。厳密な不正防止は行っていません。
         </p>
       </div>
+
+      {/* モバイル11: 到着してチェックイン可能になった瞬間、下までスクロールしなくても押せるよう
+          画面下に固定のショートカットボタンを出す(上のボタンの代わりではなく併設) */}
+      {!isCheckedIn && eligible && (
+        <div
+          style={{ paddingBottom: 'env(safe-area-inset-bottom)' }}
+          className="fixed inset-x-0 bottom-0 z-10 border-t border-border bg-surface p-3 lg:hidden"
+        >
+          <button
+            type="button"
+            onClick={() => onCheckIn(station.id)}
+            className="w-full rounded-lg bg-accent py-3 font-bold text-white shadow-lg"
+          >
+            📍 {station.name}にチェックインする
+          </button>
+        </div>
+      )}
 
       {isCheckedIn && (
         <div className="mt-6 space-y-4 border-t border-border pt-6">

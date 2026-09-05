@@ -44,6 +44,8 @@ interface Props {
   favorites: Set<string>;
   onToggleFavorite: (id: string) => void;
   onSelect: (id: string) => void;
+  prefectureJump?: { prefecture: string; token: number } | null;
+  distanceMap?: Map<string, number>;
 }
 
 const PREFECTURES = Array.from(new Set(allStations.map((s) => s.prefecture))).sort((a, b) =>
@@ -64,9 +66,19 @@ export function NearbyScreen({
   favorites,
   onToggleFavorite,
   onSelect,
+  prefectureJump,
+  distanceMap,
 }: Props) {
   const [query, setQuery] = useState('');
   const [prefecture, setPrefecture] = useState('');
+  const lastJumpToken = useRef<number | null>(null);
+
+  useEffect(() => {
+    if (!prefectureJump || prefectureJump.token === lastJumpToken.current) return;
+    lastJumpToken.current = prefectureJump.token;
+    setQuery('');
+    setPrefecture(prefectureJump.prefecture);
+  }, [prefectureJump]);
   const [facility, setFacility] = useState('');
   const [unvisitedOnly, setUnvisitedOnly] = useState(false);
   const [showPrefecturePicker, setShowPrefecturePicker] = useState(false);
@@ -98,12 +110,48 @@ export function NearbyScreen({
   const withDistance = useMemo(() => {
     if (!position) return [];
     return filteredStations
-      .map((s) => ({ ...s, distanceM: distanceMeters(position.lat, position.lng, s.lat, s.lng) }))
+      .map((s) => ({
+        ...s,
+        distanceM: distanceMap?.get(s.id) ?? distanceMeters(position.lat, position.lng, s.lat, s.lng),
+      }))
       .sort((a, b) => a.distanceM - b.distanceM);
-  }, [filteredStations, position]);
+  }, [filteredStations, position, distanceMap]);
 
   const isFiltering = query.trim() !== '' || prefecture !== '' || facility !== '' || unvisitedOnly;
   const visibleList = withDistance.slice(0, isFiltering ? FILTERED_LIMIT : DEFAULT_LIMIT);
+
+  // 検索結果が0件のとき、有効な条件を1つだけ外すと何件ヒットするかを試算し、
+  // 最も効果が大きい緩和策を1つだけ提案する（複数出すと選択に迷わせるため）
+  const emptyResultSuggestion = useMemo(() => {
+    if (filteredStations.length > 0) return null;
+    const q = query.trim();
+    const countWith = (opts: { q?: string; pref?: string; fac?: string; unvisited?: boolean }) =>
+      allStations
+        .filter((s) => (opts.q ? s.name.includes(opts.q) || s.nameKana?.includes(opts.q) : true))
+        .filter((s) => (opts.pref ? s.prefecture === opts.pref : true))
+        .filter((s) => (opts.fac ? (s.facilities ?? []).includes(opts.fac) : true))
+        .filter((s) => (opts.unvisited ? !checkedInIds.has(s.id) : true)).length;
+
+    const candidates: { label: string; count: number; clear: () => void }[] = [];
+    if (q) {
+      const count = countWith({ pref: prefecture, fac: facility, unvisited: unvisitedOnly });
+      if (count > 0) candidates.push({ label: `「${q}」の検索語を外す`, count, clear: () => setQuery('') });
+    }
+    if (prefecture) {
+      const count = countWith({ q, fac: facility, unvisited: unvisitedOnly });
+      if (count > 0) candidates.push({ label: `${prefecture}の絞り込みを外して全国から探す`, count, clear: () => setPrefecture('') });
+    }
+    if (facility) {
+      const count = countWith({ q, pref: prefecture, unvisited: unvisitedOnly });
+      if (count > 0) candidates.push({ label: `「${facility}」の条件を外す`, count, clear: () => setFacility('') });
+    }
+    if (unvisitedOnly) {
+      const count = countWith({ q, pref: prefecture, fac: facility });
+      if (count > 0) candidates.push({ label: '未訪問のみの条件を外す', count, clear: () => setUnvisitedOnly(false) });
+    }
+    candidates.sort((a, b) => b.count - a.count);
+    return candidates[0] ?? null;
+  }, [filteredStations.length, query, prefecture, facility, unvisitedOnly, checkedInIds]);
 
   useEffect(() => {
     setFocusedIndex(-1);
@@ -151,13 +199,25 @@ export function NearbyScreen({
   const previewStation = previewStationId ? allStations.find((s) => s.id === previewStationId) : undefined;
   const previewDistance = previewStation
     ? (withDistance.find((s) => s.id === previewStation.id)?.distanceM ??
+      distanceMap?.get(previewStation.id) ??
       (position ? distanceMeters(position.lat, position.lng, previewStation.lat, previewStation.lng) : null))
     : null;
 
   const renderList = (limit: number, emptyMessage: string) => (
     <div ref={listRef}>
       {visibleList.length === 0 ? (
-        <p className="py-8 text-center text-sm text-ink-muted">{emptyMessage}</p>
+        <div className="py-8 text-center text-sm text-ink-muted">
+          <p>{emptyMessage}</p>
+          {emptyResultSuggestion && (
+            <button
+              type="button"
+              onClick={emptyResultSuggestion.clear}
+              className="mt-3 rounded-lg border border-accent px-3 py-1.5 text-xs font-bold text-accent"
+            >
+              {emptyResultSuggestion.label}（{emptyResultSuggestion.count}件ヒット）
+            </button>
+          )}
+        </div>
       ) : (
         <div className="overflow-hidden rounded-lg border border-border">
           {visibleList.map((s, i) => (
@@ -315,7 +375,7 @@ export function NearbyScreen({
 
   if (isDesktop) {
     return (
-      <div className="flex h-[calc(100vh-1px)] pl-56">
+      <div className="flex h-[calc(100vh-1px)] pl-[var(--sidebar-w)]">
         <div className="w-[420px] shrink-0 overflow-y-auto border-r border-border p-6">
           <div className="mb-1 text-xs font-bold tracking-wide text-accent">NEARBY</div>
           <h1 className="mb-2 text-2xl font-black">近くの道の駅</h1>
@@ -417,6 +477,7 @@ export function NearbyScreen({
       {position && (
         <BottomSheet
           forcePeekKey={previewStationId}
+          onPullToRefresh={!isManualPosition ? onStart : undefined}
           header={
             <NearbyStrip stations={withDistance.slice(0, 8)} checkedInIds={checkedInIds} onSelect={onSelect} />
           }

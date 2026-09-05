@@ -36,7 +36,20 @@ export default defineConfig({
         ],
       },
       workbox: {
-        globPatterns: ['**/*.{js,css,html,svg,json}'],
+        globPatterns: ['**/*.{js,css,html,svg}'],
+        // マイページ・設定・友達・駅詳細・ミニ地図など、初回起動時にまず使わない画面のチャンクは
+        // インストール時の一括プリキャッシュから外す(初回起動時のダウンロード量を減らすため)。
+        // 実際に開いたときはruntimeCachingのStaleWhileRevalidateで裏側からキャッシュされ、
+        // 次回以降はオフラインでも表示できる
+        globIgnores: [
+          '**/MyPage-*.js',
+          '**/FriendsScreen-*.js',
+          '**/SettingsPanel-*.js',
+          '**/StationDetail-*.js',
+          '**/StationMap-*.js',
+          '**/StampBook-*.js',
+          '**/photos-*.js',
+        ],
         runtimeCaching: [
           {
             urlPattern: /^https:\/\/[abc]\.tile\.openstreetmap\.org\/.*/,
@@ -53,6 +66,16 @@ export default defineConfig({
             options: {
               cacheName: 'station-photos',
               expiration: { maxEntries: 1300, maxAgeSeconds: 60 * 60 * 24 * 90 },
+            },
+          },
+          {
+            // globIgnoresで初回プリキャッシュから外した遅延読み込みチャンク。開いた時点で
+            // キャッシュされるので、2回目以降の訪問やオフライン時にも表示できる
+            urlPattern: /\/assets\/.*\.(?:js|css)$/,
+            handler: 'StaleWhileRevalidate',
+            options: {
+              cacheName: 'lazy-chunks',
+              expiration: { maxEntries: 40, maxAgeSeconds: 60 * 60 * 24 * 30 },
             },
           },
         ],
