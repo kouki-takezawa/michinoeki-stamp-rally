@@ -2,7 +2,7 @@ import { lazy, Suspense, useEffect, useMemo, useRef, useState } from 'react';
 import stations from '../data/michinoeki.json';
 import { useMediaQuery } from '../hooks/useMediaQuery';
 import { distanceMeters } from '../lib/distance';
-import { MOBILE_TABBAR_SPACE } from '../lib/layout';
+import { MOBILE_TABBAR_SPACE, SHEET_PEEK_PX } from '../lib/layout';
 import { capitalOfPrefecture } from '../lib/prefectureCapitals';
 import { loadRecentSearches, loadRecentStationIds, recordRecentSearch } from '../lib/recentActivity';
 import { activeSeasonalEvent } from '../lib/seasonalEvents';
@@ -11,10 +11,12 @@ import type { Station } from '../lib/types';
 import { BottomSheet } from './BottomSheet';
 import { FilterChips } from './FilterChips';
 import { Footer } from './Footer';
+import { MapPreviewCard } from './MapPreviewCard';
 import { NearbyStrip } from './NearbyStrip';
 import { OfflineMapButton } from './OfflineMapButton';
 import { PrefecturePicker } from './PrefecturePicker';
 import { SearchFilterBar } from './SearchFilterBar';
+import { SearchInput } from './SearchInput';
 import { StationListSkeleton } from './Skeleton';
 import { StationListItem } from './StationListItem';
 
@@ -70,6 +72,7 @@ export function NearbyScreen({
   const [showPrefecturePicker, setShowPrefecturePicker] = useState(false);
   const [hoveredId, setHoveredId] = useState<string | null>(null);
   const [focusedIndex, setFocusedIndex] = useState(-1);
+  const [previewStationId, setPreviewStationId] = useState<string | null>(null);
   const listRef = useRef<HTMLDivElement | null>(null);
   const isDesktop = useMediaQuery('(min-width: 1024px)');
   const seasonalEvent = useMemo(() => activeSeasonalEvent(), []);
@@ -133,7 +136,23 @@ export function NearbyScreen({
     listRef.current?.querySelector(`[data-row-index="${focusedIndex}"]`)?.scrollIntoView({ block: 'nearest' });
   }, [focusedIndex]);
 
-  const highlightedId = hoveredId ?? (focusedIndex >= 0 ? (visibleList[focusedIndex]?.id ?? null) : null);
+  // 地図上でピンをタップした際、対応するリスト行もハイライト・スクロールして双方向に連動させる
+  useEffect(() => {
+    if (!previewStationId) return;
+    const idx = visibleList.findIndex((s) => s.id === previewStationId);
+    if (idx >= 0) {
+      listRef.current?.querySelector(`[data-row-index="${idx}"]`)?.scrollIntoView({ block: 'nearest' });
+    }
+  }, [previewStationId, visibleList]);
+
+  const highlightedId =
+    previewStationId ?? hoveredId ?? (focusedIndex >= 0 ? (visibleList[focusedIndex]?.id ?? null) : null);
+
+  const previewStation = previewStationId ? allStations.find((s) => s.id === previewStationId) : undefined;
+  const previewDistance = previewStation
+    ? (withDistance.find((s) => s.id === previewStation.id)?.distanceM ??
+      (position ? distanceMeters(position.lat, position.lng, previewStation.lat, previewStation.lng) : null))
+    : null;
 
   const renderList = (limit: number, emptyMessage: string) => (
     <div ref={listRef}>
@@ -165,10 +184,12 @@ export function NearbyScreen({
     </div>
   );
 
-  const searchBar = (
+  const handleCommitSearch = (term: string) => {
+    if (term.trim()) setRecentSearches(recordRecentSearch(term));
+  };
+
+  const filterBar = (
     <SearchFilterBar
-      query={query}
-      onQueryChange={setQuery}
       prefecture={prefecture}
       onPrefectureChange={setPrefecture}
       prefectures={PREFECTURES}
@@ -176,10 +197,6 @@ export function NearbyScreen({
       onFacilityChange={setFacility}
       unvisitedOnly={unvisitedOnly}
       onUnvisitedOnlyChange={setUnvisitedOnly}
-      recentSearches={recentSearches}
-      onCommitSearch={(term) => {
-        if (term.trim()) setRecentSearches(recordRecentSearch(term));
-      }}
     />
   );
 
@@ -239,7 +256,7 @@ export function NearbyScreen({
   ) : null;
 
   const locationCta = !position && (
-    <div className="rounded-lg border border-border bg-surface p-4 text-sm shadow-sm">
+    <div className="pointer-events-auto rounded-lg border border-border bg-surface p-4 text-sm shadow-sm">
       {status === 'loading' ? (
         <>
           <p className="mb-2 text-ink-muted">現在地を取得中…</p>
@@ -285,6 +302,17 @@ export function NearbyScreen({
     </div>
   );
 
+  const mapPreview = previewStation && (
+    <MapPreviewCard
+      station={previewStation}
+      distanceM={previewDistance}
+      isCheckedIn={checkedInIds.has(previewStation.id)}
+      isFavorite={favorites.has(previewStation.id)}
+      onOpenDetail={() => onSelect(previewStation.id)}
+      onClose={() => setPreviewStationId(null)}
+    />
+  );
+
   if (isDesktop) {
     return (
       <div className="flex h-[calc(100vh-1px)] pl-56">
@@ -295,11 +323,20 @@ export function NearbyScreen({
             全国{allStations.length}件の道の駅から、現在地に近い順に探せます。矢印キーで移動、Enterで詳細を開けます。
           </p>
           {seasonalBanner}
+          <div className="mb-3">
+            <SearchInput
+              query={query}
+              onQueryChange={setQuery}
+              recentSearches={recentSearches}
+              onCommitSearch={handleCommitSearch}
+              pill
+            />
+          </div>
+          {filterBar}
           {locationCta}
           {position && (
             <>
-              <div className="mt-4 mb-3">{locationStatusLine}</div>
-              <div className="mb-3">{searchBar}</div>
+              <div className="mb-3">{locationStatusLine}</div>
               {filterChips}
               {recentStationsStrip}
               <div className="mb-3">
@@ -319,10 +356,17 @@ export function NearbyScreen({
               favorites={favorites}
               userLat={isManualPosition ? undefined : position?.lat}
               userLng={isManualPosition ? undefined : position?.lng}
+              userAccuracy={isManualPosition ? undefined : position?.accuracy}
               highlightedId={highlightedId}
-              onSelect={onSelect}
+              onMarkerTap={setPreviewStationId}
+              onRequestLocation={onStart}
             />
           </Suspense>
+          {mapPreview && (
+            <div className="pointer-events-none absolute inset-x-0 bottom-4 z-10 flex justify-center px-4">
+              {mapPreview}
+            </div>
+          )}
         </div>
       </div>
     );
@@ -338,26 +382,48 @@ export function NearbyScreen({
           favorites={favorites}
           userLat={isManualPosition ? undefined : position?.lat}
           userLng={isManualPosition ? undefined : position?.lng}
+          userAccuracy={isManualPosition ? undefined : position?.accuracy}
           highlightedId={highlightedId}
-          onSelect={onSelect}
+          onMarkerTap={setPreviewStationId}
+          onRequestLocation={onStart}
         />
       </Suspense>
 
-      {!position && (
-        <div className="pointer-events-none absolute inset-x-0 top-3 z-10 flex justify-center px-3">
-          <div className="pointer-events-auto w-full max-w-sm">{locationCta}</div>
+      <div
+        className="pointer-events-none absolute inset-x-0 top-0 z-20 flex flex-col items-center gap-2 px-3"
+        style={{ paddingTop: 'calc(env(safe-area-inset-top) + 0.75rem)' }}
+      >
+        <div className="pointer-events-auto w-full max-w-sm">
+          <SearchInput
+            query={query}
+            onQueryChange={setQuery}
+            recentSearches={recentSearches}
+            onCommitSearch={handleCommitSearch}
+            pill
+          />
+        </div>
+        {!position && <div className="w-full max-w-sm">{locationCta}</div>}
+      </div>
+
+      {mapPreview && (
+        <div
+          className="pointer-events-none absolute inset-x-0 z-20 flex justify-center px-3"
+          style={{ bottom: SHEET_PEEK_PX + 12 }}
+        >
+          {mapPreview}
         </div>
       )}
 
       {position && (
         <BottomSheet
+          forcePeekKey={previewStationId}
           header={
             <NearbyStrip stations={withDistance.slice(0, 8)} checkedInIds={checkedInIds} onSelect={onSelect} />
           }
         >
           {seasonalBanner}
           <div className="mb-2">{locationStatusLine}</div>
-          <div className="mb-3">{searchBar}</div>
+          {filterBar}
           {filterChips}
           {recentStationsStrip}
           <div className="mb-3">

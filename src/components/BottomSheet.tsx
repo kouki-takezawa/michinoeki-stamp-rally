@@ -1,5 +1,5 @@
-import { useRef, useState, type ReactNode } from 'react';
-import { MOBILE_TABBAR_SPACE } from '../lib/layout';
+import { useEffect, useRef, useState, type ReactNode } from 'react';
+import { MOBILE_TABBAR_SPACE, SHEET_PEEK_PX } from '../lib/layout';
 
 type SnapState = 'peek' | 'half' | 'full';
 
@@ -7,20 +7,27 @@ interface Props {
   children: ReactNode;
   header?: ReactNode;
   defaultState?: SnapState;
+  // 値が変わるたびに'peek'へスナップし直す(地図上でピンをタップした際に、プレビューカードの
+  // すぐ下にシートを畳んでおくために使う。値そのものは使わずキーとしてのみ利用)
+  forcePeekKey?: string | null;
 }
 
 function snapPx(state: SnapState): number {
   const vh = window.innerHeight;
-  if (state === 'peek') return 128;
+  if (state === 'peek') return SHEET_PEEK_PX;
   if (state === 'half') return vh * 0.5;
   return vh * 0.88;
 }
 
-export function BottomSheet({ children, header, defaultState = 'half' }: Props) {
+export function BottomSheet({ children, header, defaultState = 'half', forcePeekKey }: Props) {
   const [state, setState] = useState<SnapState>(defaultState);
   const [dragHeight, setDragHeight] = useState<number | null>(null);
   const dragStartY = useRef<number | null>(null);
   const startHeight = useRef(0);
+
+  useEffect(() => {
+    if (forcePeekKey) setState('peek');
+  }, [forcePeekKey]);
 
   const onPointerDown = (e: React.PointerEvent) => {
     dragStartY.current = e.clientY;

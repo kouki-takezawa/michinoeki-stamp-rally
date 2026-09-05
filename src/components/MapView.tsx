@@ -11,8 +11,10 @@ interface Props {
   favorites: Set<string>;
   userLat?: number;
   userLng?: number;
+  userAccuracy?: number;
   highlightedId?: string | null;
-  onSelect: (id: string) => void;
+  onMarkerTap: (id: string | null) => void;
+  onRequestLocation: () => void;
 }
 
 const DEFAULT_CENTER: [number, number] = [36.2, 138.2];
@@ -22,13 +24,16 @@ const CLUSTER_PIXEL_SIZE = 56;
 // このズームより広域(数字より小さい)では、道の駅単位のピクセル格子クラスタではなく
 // 都道府県単位で1つの円にまとめる(全国表示で無数の数字が乱雑に並ぶのを防ぐ)
 const PREFECTURE_AGGREGATE_MAX_ZOOM = 7;
+// GPS精度円は極端に悪い精度(推定位置など)のときに地図全体を覆ってしまわないよう上限を設ける
+const MAX_ACCURACY_CIRCLE_M = 500;
 
-const userIcon = L.divIcon({
-  className: '',
-  html: '<div style="width:14px;height:14px;border-radius:50%;background:#3d5a73;border:2px solid white;box-shadow:0 0 0 2px rgba(61,90,115,0.4)"></div>',
-  iconSize: [14, 14],
-  iconAnchor: [7, 7],
-});
+const userIconHtml = `
+  <div style="position:relative;width:20px;height:20px;">
+    <div class="pulse-ring" style="position:absolute;inset:0;border-radius:9999px;background:#3d5a73;"></div>
+    <div style="position:absolute;left:3px;top:3px;width:14px;height:14px;border-radius:9999px;background:#3d5a73;border:2px solid white;box-shadow:0 0 0 1px rgba(61,90,115,0.4);"></div>
+  </div>
+`;
+const userIcon = L.divIcon({ className: '', html: userIconHtml, iconSize: [20, 20], iconAnchor: [10, 10] });
 
 export function MapView({
   stations,
@@ -37,25 +42,32 @@ export function MapView({
   favorites,
   userLat,
   userLng,
+  userAccuracy,
   highlightedId,
-  onSelect,
+  onMarkerTap,
+  onRequestLocation,
 }: Props) {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const mapRef = useRef<L.Map | null>(null);
   const layerRef = useRef<L.LayerGroup | null>(null);
   const userMarkerRef = useRef<L.Marker | null>(null);
+  const accuracyCircleRef = useRef<L.Circle | null>(null);
   const hasFlownRef = useRef(false);
   const [tilesLoaded, setTilesLoaded] = useState(false);
   const [tilesRefreshing, setTilesRefreshing] = useState(false);
 
-  const dataRef = useRef({ stations, checkedInIds, favorites, highlightedId, onSelect });
-  dataRef.current = { stations, checkedInIds, favorites, highlightedId, onSelect };
+  const dataRef = useRef({ stations, checkedInIds, favorites, highlightedId, onMarkerTap });
+  dataRef.current = { stations, checkedInIds, favorites, highlightedId, onMarkerTap };
   const redrawRef = useRef<() => void>(() => {});
   const redrawFrameRef = useRef<number | null>(null);
+  const userPositionRef = useRef<{ lat: number; lng: number } | null>(null);
 
   useEffect(() => {
     if (!containerRef.current) return;
-    const map = L.map(containerRef.current, { preferCanvas: true }).setView(DEFAULT_CENTER, DEFAULT_ZOOM);
+    const map = L.map(containerRef.current, { preferCanvas: true, zoomControl: false }).setView(
+      DEFAULT_CENTER,
+      DEFAULT_ZOOM,
+    );
     mapRef.current = map;
 
     const tiles = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
@@ -71,8 +83,12 @@ export function MapView({
     const layer = L.layerGroup().addTo(map);
     layerRef.current = layer;
 
+    // マーカー以外(地図の背景)をタップしたらプレビューを閉じる。Leafletはマーカーのクリックを
+    // デフォルトでバブリングさせないため、ここに届くのは背景タップのみ
+    map.on('click', () => dataRef.current.onMarkerTap(null));
+
     const redrawNow = () => {
-      const { stations, checkedInIds, favorites, highlightedId, onSelect } = dataRef.current;
+      const { stations, checkedInIds, favorites, highlightedId, onMarkerTap } = dataRef.current;
       layer.clearLayers();
 
       if (map.getZoom() <= PREFECTURE_AGGREGATE_MAX_ZOOM) {
@@ -99,7 +115,8 @@ export function MapView({
           });
           const marker = L.marker([capital.lat, capital.lng], { icon });
           marker.bindTooltip(prefecture, { direction: 'top', offset: [0, -4] });
-          marker.on('click', () => {
+          marker.on('click', (e) => {
+            L.DomEvent.stopPropagation(e);
             map.flyTo([capital.lat, capital.lng], PREFECTURE_FOCUS_ZOOM, { duration: 0.6 });
           });
           marker.addTo(layer);
@@ -139,7 +156,10 @@ export function MapView({
             weight: isHighlighted ? 3 : checked || favorite ? 2 : 1.5,
           });
           marker.bindTooltip(s.name, { direction: 'top', offset: [0, -4] });
-          marker.on('click', () => onSelect(s.id));
+          marker.on('click', (e) => {
+            L.DomEvent.stopPropagation(e);
+            onMarkerTap(s.id);
+          });
           marker.addTo(layer);
         } else {
           const anyChecked = bucket.points.some((s) => checkedInIds.has(s.id));
@@ -155,7 +175,8 @@ export function MapView({
             iconAnchor: [size / 2, size / 2],
           });
           const clusterMarker = L.marker([lat, lng], { icon });
-          clusterMarker.on('click', () => {
+          clusterMarker.on('click', (e) => {
+            L.DomEvent.stopPropagation(e);
             const bounds = L.latLngBounds(bucket.points.map((s) => [s.lat, s.lng] as [number, number]));
             map.flyToBounds(bounds, { padding: [40, 40], maxZoom: 16, duration: 0.4 });
           });
@@ -184,6 +205,7 @@ export function MapView({
       mapRef.current = null;
       layerRef.current = null;
       userMarkerRef.current = null;
+      accuracyCircleRef.current = null;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -208,20 +230,64 @@ export function MapView({
     if (!map) return;
     if (userLat === undefined || userLng === undefined) {
       hasFlownRef.current = false;
+      userPositionRef.current = null;
       userMarkerRef.current?.remove();
       userMarkerRef.current = null;
+      accuracyCircleRef.current?.remove();
+      accuracyCircleRef.current = null;
       return;
     }
+    userPositionRef.current = { lat: userLat, lng: userLng };
+
     if (userMarkerRef.current) {
       userMarkerRef.current.setLatLng([userLat, userLng]);
     } else {
-      userMarkerRef.current = L.marker([userLat, userLng], { icon: userIcon }).addTo(map);
+      // interactive:falseにして、駅マーカーと重なったときにクリックが素通りするようにする
+      // (現在地マーカー自体はタップ対象ではないため)
+      userMarkerRef.current = L.marker([userLat, userLng], {
+        icon: userIcon,
+        zIndexOffset: 1000,
+        interactive: false,
+      }).addTo(map);
     }
+
+    const clampedAccuracy =
+      userAccuracy !== undefined && Number.isFinite(userAccuracy)
+        ? Math.min(userAccuracy, MAX_ACCURACY_CIRCLE_M)
+        : null;
+    if (clampedAccuracy !== null) {
+      if (accuracyCircleRef.current) {
+        accuracyCircleRef.current.setLatLng([userLat, userLng]).setRadius(clampedAccuracy);
+      } else {
+        accuracyCircleRef.current = L.circle([userLat, userLng], {
+          radius: clampedAccuracy,
+          color: '#3d5a73',
+          weight: 1,
+          fillColor: '#3d5a73',
+          fillOpacity: 0.12,
+          interactive: false,
+        }).addTo(map);
+      }
+    } else {
+      accuracyCircleRef.current?.remove();
+      accuracyCircleRef.current = null;
+    }
+
     if (!hasFlownRef.current) {
       hasFlownRef.current = true;
       map.flyTo([userLat, userLng], 13, { duration: 1.1 });
     }
-  }, [userLat, userLng]);
+  }, [userLat, userLng, userAccuracy]);
+
+  const handleLocateClick = () => {
+    const map = mapRef.current;
+    const pos = userPositionRef.current;
+    if (map && pos) {
+      map.flyTo([pos.lat, pos.lng], Math.max(map.getZoom(), 14), { duration: 0.6 });
+    } else {
+      onRequestLocation();
+    }
+  };
 
   return (
     <div className="relative z-0 h-full w-full">
@@ -247,6 +313,44 @@ export function MapView({
           <span className="h-2 w-2 rounded-full bg-[#c9781f]" aria-hidden="true" />
           お気に入り
         </span>
+      </div>
+
+      <div className="pointer-events-none absolute bottom-[148px] right-3 z-30 flex flex-col items-center gap-2 [&>*]:pointer-events-auto">
+        <div className="flex flex-col overflow-hidden rounded-full bg-surface shadow-lg">
+          <button
+            type="button"
+            onClick={() => mapRef.current?.zoomIn()}
+            aria-label="ズームイン"
+            className="flex h-10 w-10 items-center justify-center text-lg font-bold text-ink hover:bg-surface-2"
+          >
+            +
+          </button>
+          <div className="h-px w-full bg-border" />
+          <button
+            type="button"
+            onClick={() => mapRef.current?.zoomOut()}
+            aria-label="ズームアウト"
+            className="flex h-10 w-10 items-center justify-center text-lg font-bold text-ink hover:bg-surface-2"
+          >
+            −
+          </button>
+        </div>
+        <button
+          type="button"
+          onClick={handleLocateClick}
+          aria-label="現在地に移動"
+          className="flex h-10 w-10 items-center justify-center rounded-full bg-surface text-accent shadow-lg hover:bg-surface-2"
+        >
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+            <circle cx="12" cy="12" r="3" fill="currentColor" />
+            <path
+              d="M12 2v3M12 19v3M2 12h3M19 12h3"
+              stroke="currentColor"
+              strokeWidth="2"
+              strokeLinecap="round"
+            />
+          </svg>
+        </button>
       </div>
     </div>
   );
