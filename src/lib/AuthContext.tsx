@@ -20,12 +20,23 @@ interface AuthContextValue {
 
 const AuthContext = createContext<AuthContextValue | null>(null);
 
+// SupabaseのPASSWORD_RECOVERYイベントは発火タイミングが不安定なことがあるため、
+// リダイレクトURL自体(#...type=recovery)を直接見て判定する。こちらを正とする。
+function isRecoveryRedirect(): boolean {
+  if (typeof window === 'undefined') return false;
+  return window.location.hash.includes('type=recovery') || window.location.search.includes('type=recovery');
+}
+
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [session, setSession] = useState<Session | null>(null);
   const [loading, setLoading] = useState(true);
-  const [isPasswordRecovery, setIsPasswordRecovery] = useState(false);
+  const [isPasswordRecovery, setIsPasswordRecovery] = useState(isRecoveryRedirect);
 
   useEffect(() => {
+    if (isRecoveryRedirect()) {
+      // URLに残ったトークンで判定を再利用しない・アドレスバーに残さないよう、読み取った直後に消す
+      window.history.replaceState(null, '', window.location.pathname + window.location.search);
+    }
     supabase.auth.getSession().then(({ data }) => {
       setSession(data.session);
       setLoading(false);
