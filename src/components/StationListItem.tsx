@@ -1,6 +1,7 @@
 import { useRef, useState } from 'react';
 import { formatDistance } from '../lib/distance';
 import { estimateEta } from '../lib/eta';
+import { buildDirectionsUrl } from '../lib/navigation';
 import type { StationWithDistance } from '../lib/types';
 import { HighlightedText } from './HighlightedText';
 
@@ -10,6 +11,7 @@ const LONG_PRESS_MOVE_TOLERANCE = 10;
 
 interface Props {
   station: StationWithDistance;
+  origin?: { lat: number; lng: number } | null;
   isCheckedIn: boolean;
   isFavorite: boolean;
   isHighlighted?: boolean;
@@ -21,6 +23,7 @@ interface Props {
 
 export function StationListItem({
   station,
+  origin,
   isCheckedIn,
   isFavorite,
   isHighlighted = false,
@@ -35,7 +38,7 @@ export function StationListItem({
   const pendingTap = useRef<number | null>(null);
   const longPressTimer = useRef<number | null>(null);
   const longPressStart = useRef<{ x: number; y: number } | null>(null);
-  const navUrl = `https://www.google.com/maps/dir/?api=1&destination=${station.lat},${station.lng}`;
+  const navUrl = buildDirectionsUrl(station, origin);
 
   const clearLongPress = () => {
     if (longPressTimer.current !== null) {

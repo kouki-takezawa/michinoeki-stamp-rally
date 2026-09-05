@@ -4,6 +4,7 @@ import { formatDistance } from '../lib/distance';
 import { estimateEta } from '../lib/eta';
 import { FACILITY_ICON } from '../lib/facilityIcons';
 import { usePreferences } from '../lib/PreferencesContext';
+import { buildDirectionsUrl } from '../lib/navigation';
 import { formatRelativeTime } from '../lib/relativeTime';
 import { regionOfPrefecture } from '../lib/regions';
 import { speak } from '../lib/speech';
@@ -72,7 +73,7 @@ export function StationDetail({
     isManualPosition ? Number.POSITIVE_INFINITY : accuracy,
   );
   const eta = distanceM !== null ? estimateEta(distanceM) : null;
-  const navUrl = `https://www.google.com/maps/dir/?api=1&destination=${station.lat},${station.lng}`;
+  const navUrl = buildDirectionsUrl(station, position);
   const [trivia, setTrivia] = useState(() => pickTrivia(regionOfPrefecture(station.prefecture)?.name));
   useEffect(() => {
     setTrivia(pickTrivia(regionOfPrefecture(station.prefecture)?.name));

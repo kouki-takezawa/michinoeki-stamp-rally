@@ -224,6 +224,7 @@ export function NearbyScreen({
             <div key={s.id} data-row-index={i}>
               <StationListItem
                 station={s}
+                origin={position}
                 isCheckedIn={checkedInIds.has(s.id)}
                 isFavorite={favorites.has(s.id)}
                 isHighlighted={highlightedId === s.id}
@@ -366,6 +367,7 @@ export function NearbyScreen({
     <MapPreviewCard
       station={previewStation}
       distanceM={previewDistance}
+      origin={position}
       isCheckedIn={checkedInIds.has(previewStation.id)}
       isFavorite={favorites.has(previewStation.id)}
       onOpenDetail={() => onSelect(previewStation.id)}

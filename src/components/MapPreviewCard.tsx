@@ -1,9 +1,11 @@
 import { formatDistance } from '../lib/distance';
+import { buildDirectionsUrl } from '../lib/navigation';
 import type { Station } from '../lib/types';
 
 interface Props {
   station: Station;
   distanceM: number | null;
+  origin?: { lat: number; lng: number } | null;
   isCheckedIn: boolean;
   isFavorite: boolean;
   onOpenDetail: () => void;
@@ -12,8 +14,8 @@ interface Props {
 
 // Google/Apple マップの「ピンをタップ→簡易プレビュー→もう一度タップで詳細」の挙動を再現する
 // ミニカード。ここでは開かず、詳細画面(DetailOverlay)を開くかどうかは呼び出し元に委ねる。
-export function MapPreviewCard({ station, distanceM, isCheckedIn, isFavorite, onOpenDetail, onClose }: Props) {
-  const navUrl = `https://www.google.com/maps/dir/?api=1&destination=${station.lat},${station.lng}`;
+export function MapPreviewCard({ station, distanceM, origin, isCheckedIn, isFavorite, onOpenDetail, onClose }: Props) {
+  const navUrl = buildDirectionsUrl(station, origin);
 
   return (
     <div className="pointer-events-auto w-full max-w-sm rounded-2xl border border-border bg-surface p-3 shadow-xl">
