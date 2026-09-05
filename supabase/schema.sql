@@ -140,8 +140,11 @@ create policy "profiles_select" on public.profiles
       select 1 from public.friendships f
       where f.status = 'pending'
         and (
-          (f.requester_id = auth.uid() and f.addressee_id = id)
-          or (f.addressee_id = auth.uid() and f.requester_id = id)
+          -- friendshipsにも同名のidカラムがあるため、bareなidだとサブクエリ内でf.idに束縛されて
+          -- 常に不一致になっていた(申請中の相手のプロフィールが誰にも見えないバグの原因)。
+          -- public.profiles.idと明示的に修飾して曖昧さを解消する。
+          (f.requester_id = auth.uid() and f.addressee_id = public.profiles.id)
+          or (f.addressee_id = auth.uid() and f.requester_id = public.profiles.id)
         )
     )
   );
