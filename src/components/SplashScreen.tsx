@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { currentSeasonalSkin } from '../lib/seasonalSkin';
 
 const SESSION_KEY = 'michinoeki-splash-shown-v1';
-const TOTAL_DURATION_MS = 1500;
+const TOTAL_DURATION_MS = 3000;
 
 // 全国に道の駅が点在することを抽象的に示す背景ドット(固定配置。再レンダーで位置が飛ばないようモジュール直下で定義)
 const BG_DOTS = [
@@ -57,12 +57,12 @@ export function SplashScreen({ onFinish }: Props) {
 
   useEffect(() => {
     const timers = [
-      setTimeout(() => setStage('stamp'), 350),
+      setTimeout(() => setStage('stamp'), 700),
       setTimeout(() => {
         setStage('logo');
         if (navigator.vibrate) navigator.vibrate(20);
-      }, 750),
-      setTimeout(() => setStage('out'), 1150),
+      }, 1500),
+      setTimeout(() => setStage('out'), 2300),
       setTimeout(finish, TOTAL_DURATION_MS),
     ];
     return () => timers.forEach(clearTimeout);
